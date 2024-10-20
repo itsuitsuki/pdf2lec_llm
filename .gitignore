@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# API keys or secret configuration files (added by Lucy) 
+*.env
+
 # C extensions
 *.so
 
