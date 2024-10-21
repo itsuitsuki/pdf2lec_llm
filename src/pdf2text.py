@@ -192,14 +192,14 @@ def generate_lecture_from_images_openai(client, image_dir, prompt, context_size=
     
     return contents, image_files
 
-def summarize_lecture_openai(client, complete_lecture, summarizing_prompt, model_name="gpt-4o-mini"):
+def digest_lecture_openai(client, complete_lecture, digest_prompt, model_name="gpt-4o-mini"):
     summary = client.chat.completions.create(
         model=model_name,
         messages=[
             {"role": "system", "content": "You are a helpful assistant."},
             {
                 "role": "user",
-                "content": complete_lecture + '\n\n' + summarizing_prompt
+                "content": complete_lecture + '\n\n' + digest_prompt
             }
         ]
     )

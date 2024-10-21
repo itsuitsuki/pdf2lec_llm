@@ -1,0 +1,13 @@
+Now, as we examine this slide, we're delving into the process of modeling the posterior probability distribution using a Bernoulli random variable. Here, we're working with binary outcomes, typically labeled zero and one. 
+
+In this context, the probability parameter is denoted by the Greek letter mu. This parameter represents the probability that our random variable Y is one, given an input feature vector x. This expression—a logistic function of the features—is fundamental in logistic regression.
+
+The probability of Y being one given x is represented by one over one plus the exponent of negative theta transpose x minus theta zero. This formula stems directly from our discussion of the logistic function, capturing how we convert linear inputs into probabilities between zero and one. This logistic function serves as the backbone of estimating our label probabilities.
+
+Now, when we refer to a Bernoulli random variable, we mean a variable that has only two outcomes—success or failure, one or zero, if you will. It’s a basic building block of probability theory and perfectly aligns with our binary setting here.
+
+Looking further, we see how we model the probability distribution for the observed values: p(y given x) is mu of x to the power of y times one minus mu of x to the power of one minus y. This formulation is called the Bernoulli distribution. It allows us to compute the likelihood of observing y given our parameter mu, which changes depending on the input features.
+
+The last point hints at our next exciting step: estimating the parameters theta and theta zero using a technique known as maximum likelihood estimation. This is a method used to find the set of parameters that make the observed data most probable. We'll explore this in detail in our next lecture, setting the stage for how we fine-tune our models to accurately reflect real-world data.
+
+Overall, this slide not only reinforces our understanding of applying logistic regression to binary classification but also prepares us for the sophisticated methods of parameter estimation. Keep this foundation in mind as we continue to build more complex and powerful models in our machine learning journey.

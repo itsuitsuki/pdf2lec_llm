@@ -1,0 +1,11 @@
+Alright, let's delve into the insightful topic on this slide: the heuristic argument for using the logistic function. We've previously discussed how we enjoy the simplicity of affine functions—those are just linear transformations plus a constant. However, we hit a snag when using them to model probabilities directly. Why, you ask? Well, linear functions can take on any value from negative to positive infinity, but probabilities are constrained between zero and one.
+
+So, how do we reconcile this? Enter the concept of odds. Odds are essentially the ratio of the probability of an event happening to it not happening. This transformation gives us the range we want: it stretches from zero to infinity. Much better!
+
+Now, the magical step is applying the logarithm to these odds, which is the trick that extends their possible values across the entire real number line. This is where the term log-odds, or logit, comes from—it's simply the logarithm of the odds. Once we've extended this range, we're free to use our beloved linear models.
+
+The elegance of this transformation means we can express the logit in a straightforward linear form. Here on the slide, you see it written as theta transpose times x, plus theta zero. Remember, theta is our vector of parameters, capturing the essence of our input data's impact on the probability.
+
+By wrapping our probabilities in this log-odds formulation, we essentially bridge the gap between the bounded world of probabilities and the unbounded realm of linear functions. It’s a beautiful blend of mathematical artistry and practical utility that allows logistic regression to shine. 
+
+In essence, it's all about translating these raw input features through this transformation to give us interpretable, scalable models that can predict probabilities reliably. Keep these ideas in mind as we continue to explore the depths of probabilistic modeling through logistic regression.

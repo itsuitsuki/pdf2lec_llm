@@ -1,25 +1,47 @@
 from openai import OpenAI
 from pathlib import Path
-from src.pdf2text import convert_pdf_to_images, merge_similar_images, generate_lecture_from_images_openai, summarize_lecture_openai
+from src.pdf2text import convert_pdf_to_images, merge_similar_images, generate_lecture_from_images_openai, digest_lecture_openai
 from src.tts import generate_audio_files_openai
-from prompts.slide_prompts import get_each_page_prompt, get_summarizing_prompt
+from prompts.slide_prompts import get_each_page_prompt, get_summarizing_prompt, get_introduction_prompt
 from pydub import AudioSegment
-from tqdm import tqdm
-
+import datetime
+import json
 SIMILARITY_THRESHOLD_TO_MERGE = 0.7
 TEXT_GENERATING_CONTEXT_SIZE = 2
 MAX_TOKENS = 500
 
 TEST_PDF_NAME = "L6-Classsification-917"
+TIMESTAMP = datetime.datetime.now().strftime("%Y%m%d%H%M%S") # e.g., 20210917123456 means 2021-09-17 12:34:56
 PDF_PATH = f"./test/{TEST_PDF_NAME}.pdf"
 
 PAGE_MODEL = "gpt-4o"
-SUMMARIZATION_MODEL = "gpt-4o-mini"
+DIGEST_MODEL = "gpt-4o-mini"
 TTS_MODEL = "tts-1"
 TTS_VOICE = "alloy"
 
 # NOTE: if True, regenerate the lecture content and summary regardless of whether the files already exist
 DO_REGENERATE = False
+
+METADATA = {
+    "title": TEST_PDF_NAME,
+    "author": "default",
+    "timestamp": TIMESTAMP,
+    "pdf_src_path": PDF_PATH,
+    "similarity_threshold": SIMILARITY_THRESHOLD_TO_MERGE,
+    "text_generating_context_size": TEXT_GENERATING_CONTEXT_SIZE,
+    "max_tokens": MAX_TOKENS,
+    "page_model": PAGE_MODEL,
+    "digest_model": DIGEST_MODEL,
+    "tts_model": TTS_MODEL,
+    "tts_voice": TTS_VOICE,
+}
+# save the metadata to metadata/{TIMESTAMP}.json
+metadata_dir = f"./metadata"
+Path(metadata_dir).mkdir(parents=True, exist_ok=True)
+metadata_file = f"{metadata_dir}/{TIMESTAMP}.json"
+# save the metadata to a json file
+with open(metadata_file, 'w', encoding='utf-8') as f:
+    json.dump(METADATA, f, ensure_ascii=False, indent=4)
 client = OpenAI()
 
 print("===== Lecture Text Generation =====")
@@ -27,10 +49,10 @@ print("===== Lecture Text Generation =====")
 # audio_dir = f"./data/generated_audios/{TEST_PDF_NAME}"
 # image_dir = f"./data/images/{TEST_PDF_NAME}"
 # merged_image_dir = f"./data/merged_images/{TEST_PDF_NAME}"
-generated_lecture_dir = f"./data/{TEST_PDF_NAME}/generated_texts"
-audio_dir = f"./data/{TEST_PDF_NAME}/generated_audios"
-image_dir = f"./data/{TEST_PDF_NAME}/images"
-merged_image_dir = f"./data/{TEST_PDF_NAME}/merged_images"
+generated_lecture_dir = f"./data/{TIMESTAMP}/generated_texts"
+audio_dir = f"./data/{TIMESTAMP}/generated_audios"
+image_dir = f"./data/{TIMESTAMP}/images"
+merged_image_dir = f"./data/{TIMESTAMP}/merged_images"
 
 is_text_generated = Path(generated_lecture_dir).exists() and Path(
     f"{generated_lecture_dir}/lecture/summary.txt").exists()
@@ -51,8 +73,11 @@ else:
     merge_similar_images(image_dir, merged_image_dir,
                          similarity_threshold=SIMILARITY_THRESHOLD_TO_MERGE)
 
-    content_list, image_files = generate_lecture_from_images_openai(client, merged_image_dir, get_each_page_prompt(
-    ), context_size=TEXT_GENERATING_CONTEXT_SIZE, model_name=PAGE_MODEL, max_tokens=MAX_TOKENS)
+    content_list, image_files = generate_lecture_from_images_openai(client, merged_image_dir,
+                                                                    prompt=get_each_page_prompt(),
+                                                                    context_size=TEXT_GENERATING_CONTEXT_SIZE,
+                                                                    model_name=PAGE_MODEL,
+                                                                    max_tokens=MAX_TOKENS)
 
     # save each content into a separate file
     for i, content in enumerate(content_list):
@@ -70,37 +95,64 @@ else:
         complete_lecture += content
         complete_lecture += "\n\n"
 
-    summary = summarize_lecture_openai(
-        client, complete_lecture, get_summarizing_prompt(), model_name=SUMMARIZATION_MODEL)
+    # Introduction
+    introduction = digest_lecture_openai(
+        client, complete_lecture, get_introduction_prompt(), model_name=DIGEST_MODEL)
+    # add the introduction to the beginning of the lecture
+    content_list = [introduction] + content_list
+    with open(f"{generated_lecture_dir}/lecture/introduction.txt", 'w', encoding='utf-8') as f:
+        f.write(introduction)
+        
+    # Summarization
+    summary = digest_lecture_openai(
+        client, complete_lecture, get_summarizing_prompt(), model_name=DIGEST_MODEL)
     content_list.append(f"Here is the summary. \n{summary}")
     with open(f"{generated_lecture_dir}/lecture/summary.txt", 'w', encoding='utf-8') as f:
         f.write(summary)
     print(
-        f"Summary saved to './data/generated_texts/{TEST_PDF_NAME}/lecture/summary.txt'")
+        f"Summary saved to {generated_lecture_dir}/lecture/summary.txt")
     with open(f"{generated_lecture_dir}/lecture_with_summary.txt", 'w', encoding='utf-8') as f:
-        f.write("Complete Lecture:\n\n")
+        f.write("Introduction:\n\n")
+        f.write(introduction)
+        f.write("="*50)
+        f.write("\n\n")
+        f.write("Content:\n\n")
         f.write(complete_lecture)
-        f.write("\n\nSummary:\n\n")
+        f.write("="*50)
+        f.write("\n\n")
+        f.write("Summary:\n\n")
         f.write(summary)
-    print(f"Lecture content and summary have been saved together to {generated_lecture_dir}/lecture_with_summary.txt")
+    print(f"The whole lecture including the introduction, the main content, and the summary, "
+          "has been saved to {generated_lecture_dir}/whole_lecture.txt")
 
 print("===== Audio Generation =====")
 
-is_audio_generated = Path(audio_dir).exists() and Path(f"{audio_dir}/summary.mp3").exists()
+is_audio_generated = Path(audio_dir).exists() and Path(
+    f"{audio_dir}/summary.mp3").exists()
 if is_audio_generated and not DO_REGENERATE:
     print("The audio files have already been generated.")
     audio_files = list(Path(audio_dir).iterdir())
     # delete ends with summary.mp3
-    audio_files = [file for file in audio_files if not str(file).endswith("summary.mp3")]
+    audio_files = [file for file in audio_files if not str(
+        file).endswith("summary.mp3")]
+    # delete ends with combined.mp3
+    audio_files = [file for file in audio_files if not str(
+        file).endswith("combined.mp3")]
+    # delete ends with introduction.mp3
+    audio_files = [file for file in audio_files if not str(
+        file).endswith("introduction.mp3")]
+    
     # sort the files by the page number
     audio_files.sort(key=lambda x: int(x.stem.split("_")[1]))
+    # add the introduction audio file at the beginning
+    audio_files.insert(0, str(Path(f"{audio_dir}/introduction.mp3")))
     # add the summary audio file at the end
     audio_files.append(str(Path(f"{audio_dir}/summary.mp3")))
 else:
     # delete the existing audio files
     audio_files = generate_audio_files_openai(
         client, content_list, audio_dir, model_name=TTS_MODEL, voice=TTS_VOICE)
-    
+
 # Merge all the audio files into one
 print("===== Merging Audio Files =====")
 combined = AudioSegment.empty()

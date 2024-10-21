@@ -1,0 +1,13 @@
+Now, we're diving into justifying logistic regression using Gaussian class-conditional densities, focusing on the assumption that the variances are the same for both classes. This is pivotal because it simplifies our mathematical modeling, making the process more tractable and accurate.
+
+Notice that the probability of a class given an input can be expressed using the logistic function. The equation at the top of our slide translates into taking a linear combination of the input features and converting it into a probability using the logistic or sigmoid function.
+
+Take a closer look at the derivation here. It relies on finding the probability of one class over another by leveraging the exponentials involved in the Gaussian distributions. Here, we simplify it through expressions that help us understand the relationship between these probabilities and a linear decision boundary.
+
+In the context of our discussion, the probability of the second class, or p of one given x, can be directly obtained from the first class’s probability by subtracting from one. This elegantly ties into our logistic transformation, where the probability is framed as one-over-one plus the exponential of negative z. This makes everything symmetrical and interpretable.
+
+The parameters theta one and theta zero play a crucial role here. Theta one acts as a multiplier for our features, while theta zero provides an offset. These parameters are constructed by looking at the differences in mean and variance, as well as the prior probabilities, creating a robust statistical foundation for prediction.
+
+Now, an interesting observation is how we determine the logistic function's parameters for the other class. By flipping the signs of theta zero and theta one, you essentially derive the same logistic function for the opposite class, showcasing the inherent symmetry and balance in logistic regression.
+
+This slide wraps up our analysis beautifully, extending logistic regression's utility—and understanding it through Gaussian assumptions shines a light on its practical effectiveness in real-world data scenarios. It's all about converting complex concepts into tangible methods that help us make informed predictions. Reflect on these insights as they empower you to apply logistic regression creatively and confidently in diverse contexts.

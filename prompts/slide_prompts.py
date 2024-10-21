@@ -9,3 +9,9 @@ def get_summarizing_prompt():
     with open(SUMMARIZING_PROMPT_PATH, 'r') as file:
         summarizing_prompt = file.read()
     return summarizing_prompt
+
+def get_introduction_prompt():
+    INTRODUCTION_PROMPT_PATH = './prompts/intro_prompt' # Path to the prompt file
+    with open(INTRODUCTION_PROMPT_PATH, 'r') as file:
+        introduction_prompt = file.read()
+    return introduction_prompt

@@ -1,0 +1,15 @@
+Building classifiers can be approached in several fascinating ways, and today we'll dive into three main strategies: generative, discriminative, and decision boundaries.
+
+Let's start with generative models. Think of these as storytellers. They focus on modeling the data distribution for each class. First, we estimate the class-conditional probabilities, denoted as the probability of features given a class. Next, we determine the prior probabilities, which basically express our initial beliefs about how likely each class is before considering the data. By applying Bayes’ Rule, we combine these to obtain our posterior probabilities, updating our initial beliefs with new evidence.
+
+Imagine you're polling to predict election outcomes. A generative model would look at candidate support in various regions, the prior likelihood of voting based on past elections, and integrate new poll data to refine predictions.
+
+Now, let's switch gears to discriminative models. Unlike generative models, discriminative models cut to the chase by directly estimating the probability of each class given the data. Instead of building the story from scratch, they leverage existing stories to make the best prediction. This approach is often more straightforward and computationally efficient.
+
+For a real-world analogy, consider spam filters. Discriminative models use the features of an email, like specific words or phrases, to determine if it's spam, optimizing directly for classification without modeling the overall distribution.
+
+Finally, we need to talk about decision boundaries. These are the lines or surfaces that classifiers use to separate classes in a feature space. Think of them as invisible fences that define borders between different lands, helping us decide which class each data point belongs to.
+
+To draw these boundaries effectively, it's crucial to understand how they relate to costs of different types of errors. Depending on your priorities — say minimizing false positives in fraud detection — you adjust these boundaries accordingly.
+
+Each approach, generative or discriminative, brings its own strengths and challenges to the table. In upcoming sessions, we'll explore how these methods underpin the algorithms driving many of today's machine learning models, from voice assistants to predictive text. Thanks to these foundational strategies, we can tailor solutions to fit diverse applications and make informed decisions based on data.

@@ -1,0 +1,15 @@
+Building on our earlier discussions about logistic functions and their applications, let's dive into modeling the posterior probability distribution in the context of binary classification. 
+
+Now, imagine that we have a class label, which we denote as Y. This Y can take on one of two values: zero or one. In statistical terms, we describe this as a Bernoulli random variable. Why Bernoulli? Well, it’s named after the Bernoulli distribution, which models binary outcomes. The probability of our event, denoted by mu, is what we're trying to predict using our input data.
+
+On the slide, you see this probability expressed neatly: the probability that Y equals one, given an input vector x, is the logistic function. That’s where our previously discussed log odds transformation and the beautiful S-curve shape come back into play. The equation is calling out to us!
+
+This probability is one divided by one plus the exponential of negative theta transpose times x, minus theta zero. But let’s not get lost in the math here. The takeaway is this: by using this transformation, we're able to stay within the bounds of zero and one, exactly where probabilities should live.
+
+The symbol mu of x encapsulates this probability, signifying the likelihood of event one occurring given input x. It’s concise and elegant—a testament to the power of logistic regression in framing probabilities.
+
+Next, let's consider the likelihood for different values of y. This likelihood is written as the product of mu of x raised to the power of y, and one minus mu of x raised to the power of one minus y. It's a compact way of saying that if y is one, we just have mu of x, and if y is zero, we use one minus mu of x. This formulation beautifully expresses the binary nature of our model.
+
+Understanding this lays the foundation for our next adventure—estimating the parameters theta and theta zero using maximum likelihood, a method you’ll find powerful as we continue exploring how to fit these models to real-world data.
+
+As we wrap up this lecture, take a moment to appreciate how these mathematical tools work seamlessly to translate raw data into predictions that can drive decision-making across diverse fields. From predicting consumer behavior to diagnosing diseases, these models are at the core of intelligent systems everywhere. Embrace these ideas as they are the keys to unlocking the power of predictive models in our increasingly data-driven world.

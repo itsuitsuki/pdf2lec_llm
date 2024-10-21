@@ -17,10 +17,32 @@ def generate_audio_files_openai(client, content_list, audio_dir, model_name="tts
     for file in Path(audio_dir).iterdir():
         file.unlink()
     audio_files = []
-    pbar = tqdm(total=len(content_list)-1)
-    pbar.set_description("Generating audio files")
 
-    for i, slide_text in enumerate(content_list[:-1]):  # Skip the last item, which is the summary
+    
+    clean_slide_text_intro = content_list[0].strip()  # Remove leading/trailing whitespace
+    if clean_slide_text_intro:  # Process only if the slide has content
+        # Define the slide audio file name
+        slide_name = "introduction.mp3"
+        speech_file_path = f"{audio_dir}/{slide_name}"
+
+        # Generate speech for the current slide
+        response = client.audio.speech.create(
+            model=model_name,
+            voice=voice,
+            input=clean_slide_text_intro  # Input cleaned text, without "--- Slide:" markers
+        )
+
+        # Write the response content to the respective file
+        with open(speech_file_path, "wb") as f:
+            f.write(response.content)
+
+        print(f"Speech for the introduction saved at: {speech_file_path}")
+
+        # Add the file path to the list of audio files
+        audio_files.append(str(speech_file_path))
+    pbar = tqdm(total=len(content_list)-2, position=0, leave=True)
+    pbar.set_description("Generating audio files")
+    for i, slide_text in enumerate(content_list[1:-1]):  # Skip the last item, which is the summary
         clean_slide_text = slide_text.strip()  # Remove leading/trailing whitespace
 
         if clean_slide_text:  # Process only if the slide has content

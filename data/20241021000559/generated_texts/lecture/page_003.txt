@@ -1,0 +1,13 @@
+Now, let's delve into Bayes' Rule, a foundational concept in probability theory and statistics. This rule is pivotal for updating the probability of a hypothesis, in our case, a class, given new evidence or data — our features.
+
+Think of Bayes' Rule as a recipe for revising our beliefs in light of new information. It's a theorem that helps us transition from class-conditional probabilities, which tell us the likelihood of observing our data given a class, to posterior probabilities, which tell us the likelihood of the class given our data.
+
+In this slide, we see the essential formulas at work. Let's break it down: the posterior probability of class zero given our feature is calculated by taking the probability of the feature given class zero and multiplying it by what's called the prior probability of class zero. We then divide this product by the overall probability of the feature. This denominator acts as a normalization factor, ensuring that all probabilities add up to one.
+
+Similarly, to find the posterior probability of class one given our feature, we apply the same structure: the probability of the feature given class one, multiplied by the prior probability of class one, all divided by the overall feature probability.
+
+Now, a quick note on priors — these are our initial assumptions about the probability of each class before we see any data. They're like the default setting on your beliefs about the world, and they can come from historical data or be chosen neutrally if there's no preference.
+
+For the overall probability of the feature, we sum the products of each class-conditional probability with its corresponding prior. This represents the total chance of encountering that feature in the dataset.
+
+By leveraging Bayes' Rule, we refine our models to better capture the likelihood of class membership given new evidence. It's a vital technique, especially in scenarios where some evidence might be more relevant than others. Through practice, you'll see how this theoretical tool becomes indispensable in crafting sophisticated, prediction-capable models.
