@@ -1,0 +1,13 @@
+Now, let’s delve into class-conditional probabilities, which are pivotal in understanding how classification models, especially generative ones, make decisions. 
+
+The term "class-conditional probability" refers to the probability of observing a data point, given its specific class or category. Think of it as asking, "What's the chance of seeing this particular feature if we know it belongs to, say, an apple versus a banana?" This probability helps in modeling the distribution of features within each class, which is fundamental for generative models.
+
+In the graph here, we observe two curves, blue and red, each representing a class-conditional probability distribution: one for label zero and another for label one. These curves show us the likelihood of observing various feature values within each class. For instance, if we had a fruit’s size on the x-axis, the curves might represent how often sizes appear in each class, like apples versus bananas.
+
+Notice how these distributions may overlap. This intersection is crucial because it’s where our model must decide which class a new observation belongs to. The model uses these probabilities to estimate where a new data point, with its specific features, fits best.
+
+It's important to remember that while these probabilities are assumed to be known, in practice, they need to be estimated from data. This is done through techniques like Maximum Likelihood Estimation, where we use the available data to predict the most likely parameters that define these distributions.
+
+Understanding class-conditional probabilities helps us appreciate the nuanced decisions generative models make. These models simulate potential observations to make educated guesses about class membership, leveraging the distribution of data to guide predictions.
+
+As you explore models, keep these probabilistic foundations in mind. They not only reinforce the logic behind classification but also reveal the elegance of statistical machine learning techniques in capturing the complexities of real-world data.
