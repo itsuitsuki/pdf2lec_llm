@@ -1,0 +1,11 @@
+Let's dive deeper into the intriguing transformation that's at the heart of logistic regression. On this slide, we're tackling a critical question: How do we get from linear functions, which can output any real number, to a probability, which is confined between zero and one? 
+
+This brings us to the idea of odds. The odds are simply a ratio of probabilities: the probability of an event happening over the probability of it not happening. Unlike probabilities, odds can range from zero to infinity, making them more flexible for transformations.
+
+To bridge the gap, we use a mathematical trick: the logarithm. When we take the log of the odds—what we call the log-odds or logit—we transform this ratio into a range from negative to positive infinity. This trick allows us to link linear transformations, like affine functions, to probabilities.
+
+Expressed mathematically, the logit of a probability \( p \) is the logarithm of the odds, which is the log of \( p \) divided by one minus \( p \). This transformation sets the stage for a linear model, meaning we can represent the log-odds as a linear combination of our inputs. This is represented by our \( \theta \) terms—the coefficients of the model—signifying each feature's impact on the log-odds.
+
+So, unfolding this transformation step-by-step, we see how it enables us to encapsulate complex real-world phenomena in a straightforward linear framework. The elegance of this approach lies in its ability to turn intricate relationships into clear, interpretable outcomes—probabilities that dictate decision-making.
+
+Understanding this interplay opens the door to effectively modeling binary outcomes, using odds and log-odds as our intermediaries. Next time you encounter logistic regression, visualize this transformation at work, turning linear predictions into robust probability estimates. It’s a perfect blend of mathematical insights and practical application!
