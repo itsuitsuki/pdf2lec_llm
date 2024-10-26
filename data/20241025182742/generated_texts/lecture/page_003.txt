@@ -1,0 +1,13 @@
+In this slide, we're diving into the application of hypothesis testing in higher dimensions and exploring how threshold rules adapt to more complex data structures. 
+
+First, consider the observation, denoted as X, which is an n-dimensional vector. Under our null hypothesis, this vector follows a normal distribution with a specific mean and covariance matrix. The mean is zero, and the covariance matrix is denoted as C. Under the alternate hypothesis, the vector still follows a normal distribution but with a different mean and the same covariance matrix, C.
+
+An important concept here is the Cholesky decomposition of the covariance matrix, C, which we can express as U times a diagonal matrix, D, times the transpose of U. This decomposition allows us to express our likelihood function, L of X, in a more tractable form. It's crucial because this helps us transform our multivariate normal problem into something more manageable by capturing the structure of the data using orthogonal and diagonal matrices.
+
+Now, let's see how this links to our decision rules. The threshold test derived from this likelihood function simplifies our decision-making process. When determining whether to favor the alternate hypothesis, we compare the sum of the transformed variables against a threshold. This is essentially saying that the decision boils down to a simpler one-dimensional comparison, even though we originally had an n-dimensional setup.
+
+Next, we move to a Poisson distribution setting. Under both hypotheses, X follows a Poisson distribution, but with different means under each hypothesis. What does our likelihood look like here? It's a ratio of the means of these distributions, raised to a power related to the number of observations, combined with an exponential component. This ratio dictates how we establish our thresholds.
+
+Interestingly, the key takeaway remains consistent: regardless of the distribution—whether normal or Poisson—the decision ultimately hinges on comparing a transformed statistic against a threshold that reflects the underlying probability model. And, as we can see from the calculation involving the natural logarithm, our likelihood ratio threshold helps us decide which hypothesis to choose as the sample size, n, grows larger.
+
+The beauty of this approach lies in its ability to take complex multivariate or distributional settings and simplify them into intuitive, one-dimensional tests. By considering both the covariance structure in the normal case and the rate parameters in the Poisson case, we're using our statistical tools to make principled and informed decisions. This capability is essential when handling real-world data that's inherently multidimensional or modeled by different distribution types.

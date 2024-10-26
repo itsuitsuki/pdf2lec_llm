@@ -8,9 +8,9 @@ import datetime
 import json
 SIMILARITY_THRESHOLD_TO_MERGE = 0.7
 TEXT_GENERATING_CONTEXT_SIZE = 2
-MAX_TOKENS = 500
+MAX_TOKENS = 1000
 
-TEST_PDF_NAME = "L6-Classsification-917"
+TEST_PDF_NAME = "handout4_binary_hypothesis_testing"
 TIMESTAMP = datetime.datetime.now().strftime("%Y%m%d%H%M%S") # e.g., 20210917123456 means 2021-09-17 12:34:56
 PDF_PATH = f"./test/{TEST_PDF_NAME}.pdf"
 
