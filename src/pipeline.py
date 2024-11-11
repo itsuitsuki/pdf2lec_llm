@@ -8,6 +8,7 @@ import datetime
 import json
 import shutil
 import logging
+from src.textbook_indexer import TextbookIndexer
 
 
 def printing_pdf2lec(_args):
@@ -267,11 +268,25 @@ def pdf2lec(_args, task_id):
             merge_similar_images(image_dir, merged_image_dir,
                                 similarity_threshold=SIMILARITY_THRESHOLD_TO_MERGE)
 
-            content_list, image_files = generate_lecture_from_images_openai(client, merged_image_dir,
-                                                                            prompt=get_each_page_prompt(),
-                                                                            context_size=TEXT_GENERATING_CONTEXT_SIZE,
-                                                                            model_name=PAGE_MODEL,
-                                                                            max_tokens=MAX_TOKENS)
+            # Initialize textbook indexer if textbook path is provided
+            textbook_indexer = None
+            if _args.textbook_path:
+                logger.info(f"Task {task_id}: Initializing textbook indexer")
+                textbook_indexer = TextbookIndexer(_args.textbook_path)
+                # Create index if it doesn't exist
+                if not (Path(textbook_indexer.index_path) / Path(_args.textbook_path).stem).exists():
+                    logger.info(f"Task {task_id}: Creating textbook index")
+                    textbook_indexer.create_index()
+
+            content_list, image_files = generate_lecture_from_images_openai(
+                client, 
+                merged_image_dir,
+                prompt=get_each_page_prompt(),
+                textbook_indexer=textbook_indexer,  # Pass the indexer
+                context_size=TEXT_GENERATING_CONTEXT_SIZE,
+                model_name=PAGE_MODEL,
+                max_tokens=MAX_TOKENS
+            )
 
             # save each content into a separate file
             for i, content in enumerate(content_list):

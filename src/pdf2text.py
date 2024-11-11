@@ -7,14 +7,16 @@ import cv2
 import numpy as np
 from pathlib import Path
 import os
+from src.textbook_indexer import TextbookIndexer
 
-def analyze_page_by_image_openai(client, prompt, image_path, model_name="gpt-4o", max_tokens=500):
+def analyze_page_by_image_openai(client, prompt, image_path, textbook_content=None, model_name="gpt-4o", max_tokens=500):
     """
     Analyze an image using the GPT-4o model and return a description.
 
     :param client: OpenAI API client
     :param prompt: The text prompt for the model
     :param image_path: Local path to the image file
+    :param textbook_content: Relevant textbook content for enhanced generation
     :param model_name: The name of the model to use
     :param max_tokens: The maximum number of tokens to generate
     :return: Model-generated description or error message
@@ -22,6 +24,12 @@ def analyze_page_by_image_openai(client, prompt, image_path, model_name="gpt-4o"
     
     # Encode the image
     base64_image = encode_image_to_base64(image_path)
+    
+    # Modify prompt to include textbook content if available
+    enhanced_prompt = prompt
+    if textbook_content:
+        enhanced_prompt += "\n\nRelevant textbook content:\n" + "\n".join(textbook_content)
+        enhanced_prompt += "\n\nPlease incorporate relevant information from the textbook in your explanation."
 
     try:
         response = client.chat.completions.create(
@@ -30,7 +38,7 @@ def analyze_page_by_image_openai(client, prompt, image_path, model_name="gpt-4o"
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": prompt},
+                        {"type": "text", "text": enhanced_prompt},
                         {
                             "type": "image_url",
                             "image_url": {
@@ -153,13 +161,14 @@ def merge_similar_images(image_dir, output_dir, similarity_threshold=0.7):
     
     # print(f"Merged images saved to {output_dir}")
     
-def generate_lecture_from_images_openai(client, image_dir, prompt, context_size=2, model_name="gpt-4o", max_tokens=500):
+def generate_lecture_from_images_openai(client, image_dir, prompt, textbook_indexer=None, context_size=2, model_name="gpt-4o", max_tokens=500):
     """
     Generate a complete lecture by analyzing images in sequence, maintaining context.
     
     :param client: OpenAI API client
     :param image_dir: Directory containing the merged images
     :param prompt: The base prompt to use for image analysis
+    :param textbook_indexer: Textbook indexer object
     :param context_size: Number of previous slides to consider for context
     :param model_name: The name of the model to use
     :param max_tokens: The maximum number of tokens to generate
@@ -171,14 +180,31 @@ def generate_lecture_from_images_openai(client, image_dir, prompt, context_size=
     contents = []
     pbar = tqdm(total=len(image_files))
     pbar.set_description("Generating lecture text")
+    
     for i, image_file in enumerate(image_files):
         image_path = os.path.join(image_dir, image_file)
         
-        # Create a context-aware prompt
-        context_prompt = f"{prompt}\n\nContext from previous slides:\n{' '.join(context)}\n\nAnalyze the current slide in the context of what has been discussed before. remember do not repeat the same information."
+        # Get relevant textbook content if available
+        textbook_content = None
+        if textbook_indexer:
+            # Extract text from image for query (you might need to implement this)
+            # For now, we'll use the context as query
+            query = " ".join(context[-2:]) if context else "Introduction to the topic"
+            textbook_content = textbook_indexer.get_relevant_content(
+                query=query,
+                index_name=Path(textbook_indexer.textbook_path).stem
+            )
         
-        slide_content = analyze_page_by_image_openai(client, context_prompt, image_path, model_name=model_name, max_tokens=max_tokens)
-        # full_lecture += f"\n\n--- Slide: {image_file} ---\n{slide_content}"
+        context_prompt = f"{prompt}\n\nContext from previous slides:\n{' '.join(context)}\n\nAnalyze the current slide in the context of what has been discussed before. Remember do not repeat the same information."
+        
+        slide_content = analyze_page_by_image_openai(
+            client, 
+            context_prompt, 
+            image_path, 
+            textbook_content=textbook_content,
+            model_name=model_name, 
+            max_tokens=max_tokens
+        )
         
         # Update context
         context.append(slide_content)
@@ -189,7 +215,6 @@ def generate_lecture_from_images_openai(client, image_dir, prompt, context_size=
         pbar.set_postfix_str(f"Slide {i+1} analyzed")
         
     pbar.close()
-    
     return contents, image_files
 
 def digest_lecture_openai(client, complete_lecture, digest_prompt, model_name="gpt-4o-mini"):
