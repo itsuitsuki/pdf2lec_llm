@@ -1,0 +1,15 @@
+Now let's dive into optimal decision rules and how they aid us in minimizing detection errors in hypothesis testing.
+
+In our current slide, we're expanding on using likelihood ratios to make decisions. We've set up a unique threshold, denoted as Lambda, to decide between our two hypotheses.
+
+What this means is: if the likelihood ratio, L of x, is less than Lambda, we decide on the null hypothesis, H0. Conversely, if L of x is greater than Lambda, we decide on the alternate hypothesis, H1. Now, when L of x equals Lambda, we use a randomized decision. This is where we bring in a probability alpha, deciding H1 with probability alpha, and sticking with H0 with probability one minus alpha.
+
+The goal here is to minimize the probability of a "missed detection," which occurs when we fail to choose H1 when it's actually true. The probability of missed detection is given by P1 for L of x less than Lambda, plus one minus alpha times P1 when L of x is equal to Lambda.
+
+Now, let me explain how we arrive at this optimal decision rule. We use a method called integration over decision rules to control the likelihood of false alarms—the error of selecting H1 when H0 is true. We set a small allowable error, represented by epsilon. This ensures any decision rule respects the error constraints and thus becomes optimal.
+
+To illustrate this with an example, consider a scenario where our data, X, follows a normal distribution. Under the null hypothesis, X follows a normal distribution with mean zero and variance sigma squared. Under the alternate, it has a mean mu and the same variance sigma squared. Here, our task is to detect whether a constant signal is present against Gaussian noise.
+
+For this, we calculate the likelihood ratio. It uses exponential terms involving our observed data point X, the mean difference between hypotheses, and the variance. The threshold test on the likelihood ratio translates to a test directly on our observed data point X.
+
+This approach ensures robustness by balancing out the potential errors, enabling us to make precise decisions backed by a rigorous statistical framework. This comprehensive understanding is indispensable for fields needing nuanced decision-making under uncertainty.

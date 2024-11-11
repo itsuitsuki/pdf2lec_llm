@@ -36,7 +36,7 @@ def generate_audio_files_openai(client, content_list, audio_dir, model_name="tts
         with open(speech_file_path, "wb") as f:
             f.write(response.content)
 
-        print(f"Speech for the introduction saved at: {speech_file_path}")
+        # print(f"Speech for the introduction saved at: {speech_file_path}")
 
         # Add the file path to the list of audio files
         audio_files.append(str(speech_file_path))
@@ -85,7 +85,7 @@ def generate_audio_files_openai(client, content_list, audio_dir, model_name="tts
         with open(speech_file_path, "wb") as f:
             f.write(response.content)
 
-        print(f"Speech for the summary saved at: {speech_file_path}")
+        # print(f"Speech for the summary saved at: {speech_file_path}")
 
         # Add the file path to the list of audio files
         audio_files.append(str(speech_file_path))

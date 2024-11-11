@@ -1,0 +1,11 @@
+In this slide, we’re diving deeper into the application of likelihood ratios for decision-making in the context of normal and Poisson distributions. Our goal is to establish a systematic way to distinguish between hypotheses using statistical tools.
+
+First, let's talk about the scenario where our observation, X, is an n-dimensional vector. Under the null hypothesis, X follows a normal distribution with a mean of zero and covariance matrix C. In contrast, under the alternate hypothesis, it follows a normal distribution with mean µ and the same covariance C. The matrix C is crucial; it is positive definite, meaning it has all positive eigenvalues, and it can be decomposed into a product involving an orthogonal matrix U and a diagonal matrix D.
+
+Now, the likelihood ratio L of x is constructed using the exponential function based on the inverse of our covariance matrix, highlighting the critical role of statistical precision in these calculations. By defining y as the transformation of X using U, a threshold test on L of x boils down to a simpler test involving the diagonal entries of D and the components of y. This simplification is not just mathematically elegant but also practical, making it easier to apply thresholds in decision-making.
+
+Switching gears to the Poisson distributions: under the null hypothesis, the mean is µ₀, and under the alternate, it’s µ₁. Here, L of n involves a ratio of the two means raised to the power n, scaled by an exponential of their difference. The logic behind setting a threshold on L of n translates neatly to a consideration of the weighted sum of observations.
+
+In the context of large sample sizes, the decision rule becomes more deterministic. If µ₁ is greater than µ₀, we decide in favor of the alternate hypothesis for sufficiently large n. Conversely, if µ₀ is greater than µ₁, the null hypothesis holds for large n. This highlights a significant advantage of using likelihood ratios: they provide a robust guide as data size increases, thus reducing uncertainty over time.
+
+This analysis helps us build a bridge between theoretical distributions and practical decision thresholds, thereby enhancing our ability to make accurate decisions even when uncertainty prevails in our data. By leveraging these statistical insights, we can refine our understanding and applications across varied domains.

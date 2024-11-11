@@ -55,7 +55,7 @@ def convert_pdf_to_images(pdf_path, output_dir):
     :param output_dir: Directory to save the converted images
     """
     # Create the output directory if it doesn't exist
-    pdf_name = Path(pdf_path).stem
+    # pdf_name = Path(pdf_path).stem
     image_dir = Path(output_dir)
     image_dir.mkdir(parents=True, exist_ok=True)
 
@@ -70,7 +70,7 @@ def convert_pdf_to_images(pdf_path, output_dir):
         # Save the image
         image_filename = f"page_{page_num+1}.png"
         pix.save(image_dir / image_filename)
-    print(f"PDF pages converted to images and saved to {output_dir}")
+    # print(f"PDF pages converted to images and saved to {output_dir}")
         
 def calculate_similarity(img1, img2):
     """
@@ -151,7 +151,7 @@ def merge_similar_images(image_dir, output_dir, similarity_threshold=0.7):
         cv2.imwrite(os.path.join(output_dir, f'merged_{first_num:03d}.png'), merged)
         # :03d means 3 digits with leading zeros, equivalent to zfill(3)
     
-    print(f"Merged images saved to {output_dir}")
+    # print(f"Merged images saved to {output_dir}")
     
 def generate_lecture_from_images_openai(client, image_dir, prompt, context_size=2, model_name="gpt-4o", max_tokens=500):
     """
