@@ -1,0 +1,11 @@
+**Slide 1 Introduction:**
+"Did you know that the idea of hypothesis testing dates back to the early 20th century and revolutionized how we draw conclusions from data? In today’s lecture, we'll dive into the fascinating world of binary hypothesis testing, focusing on key concepts such as the likelihood ratio and the roles of null and alternative hypotheses in shaping our decisions."
+
+**Slide 2 Introduction:**
+"Imagine making decisions with real consequences — a choice that could lead to a positive outcome or a costly mistake. In this lecture, we’ll explore the Neyman-Pearson framework for hypothesis testing, emphasizing how costs influence decision-making and the strategies to minimize errors in a structured way."
+
+**Slide 3 Introduction:**
+"Ever wondered how we can make the best possible decisions when faced with uncertainty? Today, we will unpack the optimal decision rule within the Neyman-Pearson framework, examining the critical threshold that guides us in choosing between competing hypotheses while managing the risks of false alarms and missed detections."
+
+**Slide 4 Introduction:**
+"Did you know that handling multi-dimensional data can dramatically change how we approach statistical testing? In this lecture, we’ll tackle the complexities of hypothesis testing in multi-dimensional contexts, discussing techniques for simplifying our analyses and how different distributions can shape our conclusions."

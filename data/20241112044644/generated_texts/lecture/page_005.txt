@@ -1,0 +1,13 @@
+Now, let's delve into the concept of decision boundaries, as illustrated on this slide. Decision boundaries are pivotal in the realm of classification, and they hinge on the loss function you choose.
+
+To start, we often rely on a simple rule of thumb: pick the class that maximizes the posterior probability. In mathematical terms, this means you select the class "k" such that the probability of that class given the data is the highest. This is expressed as "k equals argmax over k of the probability of k given x."
+
+The intuition here is quite straightforward. If our goal is to minimize misclassification, we want to choose the class with the highest posterior probability. This ties into the concept of minimizing expected error. The expected error itself is calculated by integrating the probability of error given a data point, weighted by the probability of that data point.
+
+But here's where it gets intriguing. In safety-critical applications, merely minimizing this error might not suffice. Why? Because the cost of false negatives—where we incorrectly classify a positive instance as negative—can be far more severe than false positives. For instance, in a medical diagnosis scenario, missing a disease (false negative) could be much more dangerous than a false alert.
+
+This highlights a crucial point: the decision boundary is not just a statistical outcome, but a choice influenced by the context and the potential risks involved in misclassification.
+
+As we explore these concepts, always remember that choosing the right threshold can significantly impact the effectiveness and safety of a classification system. We'll delve deeper into these nuances in upcoming lectures, where we'll address how different loss functions can alter decision boundaries and thus shape your classification strategies.
+
+Stay tuned as we continue to unravel these complex yet fascinating aspects of machine learning!

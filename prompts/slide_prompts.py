@@ -15,6 +15,16 @@ def get_detailed_prompt():
     with open(DETAILED_PROMPT_PATH, 'r') as file:
         detailed_prompt = file.read()
     return detailed_prompt
+
+def get_each_slide_prompt(complexity):
+    if complexity == 1:
+        return get_brief_prompt()
+    elif complexity == 2:
+        return get_detailed_prompt()
+    elif complexity == 3:
+        return get_default_prompt()
+    else:
+        raise ValueError(f"Invalid complexity value {complexity}. Must be 1, 2, or 3.")
         
 def get_summarizing_prompt():
     SUMMARIZING_PROMPT_PATH = './prompts/summarizing_prompt' # Path to the prompt file

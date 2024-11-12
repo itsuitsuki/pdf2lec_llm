@@ -1,0 +1,16 @@
+{
+    "title": "L6-Classsification-917",
+    "author": "default",
+    "timestamp": "20241112044644",
+    "pdf_src_path": "./test/L6-Classsification-917.pdf",
+    "similarity_threshold": 0.4,
+    "text_generating_context_size": 2,
+    "max_tokens": 1000,
+    "page_model": "gpt-4o",
+    "digest_model": "gpt-4o-mini",
+    "tts_model": "tts-1",
+    "tts_voice": "alloy",
+    "complexity": 2,
+    "use_rag": true,
+    "textbook_name": "Deep Learning Foundations and Concepts (Christopher M. Bishop, Hugh Bishop) (Z-Library)"
+}
