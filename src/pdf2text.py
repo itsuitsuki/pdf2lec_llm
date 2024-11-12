@@ -8,6 +8,9 @@ import numpy as np
 from pathlib import Path
 import os
 from src.textbook_indexer import TextbookIndexer
+from src.logger import CustomLogger
+
+logger = CustomLogger.get_logger(__name__)
 
 def analyze_page_by_image_openai(client, prompt, image_path, textbook_content=None, model_name="gpt-4o", max_tokens=500):
     """
@@ -30,7 +33,7 @@ def analyze_page_by_image_openai(client, prompt, image_path, textbook_content=No
     if textbook_content:
         enhanced_prompt += "\n\nRelevant textbook content:\n" + "\n".join(textbook_content)
         enhanced_prompt += "\n\nPlease incorporate relevant information from the textbook in your explanation."
-
+    logger.debug(f"Enhanced prompt: {enhanced_prompt}")
     try:
         response = client.chat.completions.create(
             model=model_name,
@@ -194,6 +197,7 @@ def generate_lecture_from_images_openai(client, image_dir, prompt, textbook_inde
                 query=query,
                 index_name=Path(textbook_indexer.textbook_path).stem
             )
+            logger.debug(f"Textbook content: {textbook_content}")
         
         context_prompt = f"{prompt}\n\nContext from previous slides:\n{' '.join(context)}\n\nAnalyze the current slide in the context of what has been discussed before. Remember do not repeat the same information."
         

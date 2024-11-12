@@ -16,8 +16,7 @@ import asyncio
 from functools import partial
 import shutil
 import logging
-from src.logger import logger
-import time
+from src.logger import CustomLogger
 
 # create a Redis client and FastAPI app
 redis_client = None
@@ -31,15 +30,22 @@ async def validation_exception_handler(request: Request, exc: ValidationError):
         content={"detail": "Request validation failed", "errors": exc.errors()}
     )
 
-# Synchronous function to generate content, but can be parallelized?
+def configure_logging(debug_mode: bool):
+    CustomLogger.setup_logger(debug_mode)
+
+# Synchronous function to generate content
 def generate_content_sync(task_id: str, lec_args: LecGenerateArgs):
     try:
+        # 配置日志级别
+        configure_logging(lec_args.debug_mode)
+        logger = CustomLogger.get_logger("api")
+        logger.info(f"Starting new task with ID: {task_id}")
         # 调用主要生成函数
         metadata = pdf2lec(lec_args, task_id)
         # 更新 Redis 中的任务状态和结果
         redis_client.set(task_id, json.dumps({"status": "completed", "metadata": metadata}))
     except Exception as e:
-        logging.error(f"Task {task_id} failed: {str(e)}")
+        logger.error(f"Task {task_id} failed: {str(e)}")
         # 在出错情况下将状态更新为 "failed"
         redis_client.set(task_id, json.dumps({"status": "failed", "error": str(e)}))
         
@@ -48,8 +54,14 @@ def generate_content_sync(task_id: str, lec_args: LecGenerateArgs):
 # POST /api/v1/lec_generate
 @app.post("/api/v1/lec_generate")
 async def lec_generate(lec_args: LecGenerateArgs):
+    # 配置日志级别
+    configure_logging(lec_args.debug_mode)
+    logger = CustomLogger.get_logger("api")
+    logger.info(f"Logger setup with debug mode")
     # Unique task ID
     task_id = str(uuid.uuid4())
+    logger.info(f"Starting new task with ID: {task_id}")
+    logger.debug(f"Task {task_id}: lec_args: {lec_args}")
     # 将任务状态设置为 "pending"
     redis_client.set(task_id, json.dumps({"status": "pending"}))
     
@@ -162,7 +174,12 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=5000, help="The port to run the server.")
     parser.add_argument("--redis_port", type=int, default=6379, help="The port of the Redis server, should be referenced from the config.")
     parser.add_argument("--n_workers", type=int, default=4, help="The number of thread workers to use.")
+    parser.add_argument("--debug", action="store_true", help="Enable debug logging", default=False)
     args = parser.parse_args()
+    
+    # configure logging
+    configure_logging(args.debug)
+    
     executor = ThreadPoolExecutor(max_workers=args.n_workers)
     redis_client = redis.Redis(host='localhost', port=args.redis_port, db=0)
     # delete all uncompleted data
