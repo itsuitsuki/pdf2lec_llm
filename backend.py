@@ -18,23 +18,11 @@ import shutil
 import logging
 from src.logger import logger
 import time
-from fastapi.middleware.base import BaseHTTPMiddleware
 
 # create a Redis client and FastAPI app
 redis_client = None
 app = FastAPI()
 executor = ThreadPoolExecutor(max_workers=4)
-
-class RequestLoggingMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        start_time = time.time()
-        response = await call_next(request)
-        process_time = (time.time() - start_time) * 1000
-        logger.info(
-            f"Method: {request.method} Path: {request.url.path} "
-            f"Status: {response.status_code} Duration: {process_time:.2f}ms"
-        )
-        return response
 
 @app.exception_handler(ValidationError)
 async def validation_exception_handler(request: Request, exc: ValidationError):

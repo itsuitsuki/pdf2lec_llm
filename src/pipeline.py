@@ -9,7 +9,7 @@ import json
 import shutil
 import logging
 from src.textbook_indexer import TextbookIndexer
-
+import traceback
 
 def printing_pdf2lec(_args):
     logging.warning("This function is deprecated. Please use pdf2lec() instead.")
@@ -176,6 +176,8 @@ def printing_pdf2lec(_args):
         is_successful = True
         return METADATA # dict
     except Exception as e:
+        error_msg = f"{str(e)}\n{traceback.format_exc()}"
+        logging.error(error_msg)
         raise e
     finally:
         if not is_successful:
@@ -381,6 +383,8 @@ def pdf2lec(_args, task_id):
         is_successful = True
         return METADATA # dict
     except Exception as e:
+        error_msg = f"Task {task_id} failed: {str(e)}\n{traceback.format_exc()}"
+        logging.error(error_msg)
         raise e
     finally:
         logger.info(f"Generation task {task_id} finished.")

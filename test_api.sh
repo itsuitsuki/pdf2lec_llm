@@ -1,4 +1,4 @@
-curl -X POST http://localhost:5000/lec_generate \
+curl -X POST http://localhost:5000/api/v1/lec_generate \
 -H "Content-Type: application/json" \
 -d '{
     "similarity_threshold": 0.7,
