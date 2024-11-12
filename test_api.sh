@@ -5,7 +5,7 @@ curl -X POST http://localhost:5000/api/v1/lec_generate \
     "text_generating_context_size": 2,
     "max_tokens": 1000,
     "pdf_name": "L6-Classsification-917",
-    "textbook_path": "./test/L6-Classsification-917.pdf",
+    "textbook_path": "./test/Deep Learning Foundations and Concepts (Christopher M. Bishop, Hugh Bishop) (Z-Library).pdf",
     "page_model": "gpt-4o",
     "digest_model": "gpt-4o-mini",
     "tts_model": "tts-1",

@@ -41,7 +41,11 @@ class TextbookIndexer:
     
     def load_index(self, index_name: str) -> FAISS:
         """Load an existing FAISS index"""
-        return FAISS.load_local(str(self.index_path / index_name), self.embeddings)
+        return FAISS.load_local(
+            str(self.index_path / index_name), 
+            self.embeddings,
+            allow_dangerous_deserialization=True
+        )
     
     def get_relevant_content(self, query: str, index_name: str, k: int = 3) -> list:
         """
