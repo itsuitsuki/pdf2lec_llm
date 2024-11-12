@@ -32,7 +32,7 @@ async def validation_exception_handler(request: Request, exc: ValidationError):
 def generate_content_sync(task_id: str, lec_args: LecGenerateArgs):
     try:
         # 调用主要生成函数
-        metadata = pdf2lec(lec_args, task_id)
+        metadata = pdf2lec(lec_args, task_id, complexity=lec_args.complexity)
         # 更新 Redis 中的任务状态和结果
         redis_client.set(task_id, json.dumps({"status": "completed", "metadata": metadata}))
     except Exception as e:

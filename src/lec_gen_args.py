@@ -9,3 +9,4 @@ class LecGenerateArgs(BaseModel):
     digest_model: str = Field(..., description="The model name for generating the introduction and summary.")
     tts_model: str = Field(..., description="The model name for generating the audio.")
     tts_voice: str = Field(..., description="The voice for generating the audio.")
+    complexity: int = Field(..., description="The complexity of the lecture.")

@@ -2,7 +2,7 @@ from openai import OpenAI
 from pathlib import Path
 from src.pdf2text import convert_pdf_to_images, merge_similar_images, generate_lecture_from_images_openai, digest_lecture_openai
 from src.tts import generate_audio_files_openai
-from prompts.slide_prompts import get_each_page_prompt, get_summarizing_prompt, get_introduction_prompt
+from prompts.slide_prompts import get_brief_prompt, get_default_prompt, get_detailed_prompt, get_summarizing_prompt, get_introduction_prompt
 from pydub import AudioSegment
 import datetime
 import json
@@ -83,7 +83,7 @@ def printing_pdf2lec(_args):
                                 similarity_threshold=SIMILARITY_THRESHOLD_TO_MERGE)
 
             content_list, image_files = generate_lecture_from_images_openai(client, merged_image_dir,
-                                                                            prompt=get_each_page_prompt(),
+                                                                            prompt=get_default_prompt(),
                                                                             context_size=TEXT_GENERATING_CONTEXT_SIZE,
                                                                             model_name=PAGE_MODEL,
                                                                             max_tokens=MAX_TOKENS)
@@ -191,7 +191,7 @@ def printing_pdf2lec(_args):
             print("All generated files have been removed due to failure or interruption.")
 
 
-def pdf2lec(_args, task_id):
+def pdf2lec(_args, task_id, complexity=2):
     is_successful = False
     logger = logging.getLogger("uvicorn")
     logger.setLevel(logging.INFO)
@@ -267,8 +267,18 @@ def pdf2lec(_args, task_id):
             merge_similar_images(image_dir, merged_image_dir,
                                 similarity_threshold=SIMILARITY_THRESHOLD_TO_MERGE)
 
+            # Select the appropriate prompt based on the complexity parameter
+            if complexity == 1:
+                prompt = get_brief_prompt()
+            elif complexity == 2:
+                prompt = get_default_prompt()
+            elif complexity == 3:
+                prompt = get_detailed_prompt()
+            else:
+                raise ValueError("Invalid complexity value. Must be 1, 2, or 3.")
+
             content_list, image_files = generate_lecture_from_images_openai(client, merged_image_dir,
-                                                                            prompt=get_each_page_prompt(),
+                                                                            prompt=prompt,
                                                                             context_size=TEXT_GENERATING_CONTEXT_SIZE,
                                                                             model_name=PAGE_MODEL,
                                                                             max_tokens=MAX_TOKENS)

@@ -102,7 +102,7 @@ def calculate_similarity(img1, img2):
     
     return similarity
 
-def merge_similar_images(image_dir, output_dir, similarity_threshold=0.7):
+def merge_similar_images(image_dir, output_dir, similarity_threshold=0.4):
     """
     Merge similar consecutive images in a directory while maintaining the original order.
     
