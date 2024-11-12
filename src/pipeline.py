@@ -8,7 +8,9 @@ import datetime
 import json
 import shutil
 import logging
-
+from src.textbook_indexer import TextbookIndexer
+import traceback
+from src.logger import CustomLogger
 
 def printing_pdf2lec(_args):
     logging.warning("This function is deprecated. Please use pdf2lec() instead.")
@@ -175,6 +177,8 @@ def printing_pdf2lec(_args):
         is_successful = True
         return METADATA # dict
     except Exception as e:
+        error_msg = f"{str(e)}\n{traceback.format_exc()}"
+        logging.error(error_msg)
         raise e
     finally:
         if not is_successful:
@@ -192,6 +196,7 @@ def printing_pdf2lec(_args):
 
 
 def pdf2lec(_args, task_id, complexity=2):
+    logger = CustomLogger.get_logger("pipeline")
     is_successful = False
     logger = logging.getLogger("uvicorn")
     logger.setLevel(logging.INFO)
@@ -236,7 +241,8 @@ def pdf2lec(_args, task_id, complexity=2):
             json.dump(METADATA, f, ensure_ascii=False, indent=4)
         client = OpenAI()
 
-        # print("===== Lecture Text Generation =====")
+        logger.debug(f"Task {task_id}: Starting with configuration: {json.dumps(METADATA, indent=2)}")
+
         logger.info(f"Task {task_id}: Lecture Text Generation")
         # generated_lecture_dir = f"./data/generated_texts/{TEST_PDF_NAME}"
         # audio_dir = f"./data/generated_audios/{TEST_PDF_NAME}"
@@ -267,6 +273,17 @@ def pdf2lec(_args, task_id, complexity=2):
             merge_similar_images(image_dir, merged_image_dir,
                                 similarity_threshold=SIMILARITY_THRESHOLD_TO_MERGE)
 
+            # Initialize textbook indexer if textbook path is provided
+            textbook_indexer = None
+            if _args.textbook_path:
+                logger.info(f"Task {task_id}: Initializing textbook indexer")
+                logger.debug(f"Task {task_id}: Textbook path: {_args.textbook_path}")
+                textbook_indexer = TextbookIndexer(_args.textbook_path)
+                # Create index if it doesn't exist
+                if not (Path(textbook_indexer.index_path) / Path(_args.textbook_path).stem).exists():
+                    logger.info(f"Task {task_id}: Creating textbook index")
+                    textbook_indexer.create_index()
+
             # Select the appropriate prompt based on the complexity parameter
             if complexity == 1:
                 prompt = get_brief_prompt()
@@ -277,11 +294,23 @@ def pdf2lec(_args, task_id, complexity=2):
             else:
                 raise ValueError("Invalid complexity value. Must be 1, 2, or 3.")
 
-            content_list, image_files = generate_lecture_from_images_openai(client, merged_image_dir,
-                                                                            prompt=prompt,
-                                                                            context_size=TEXT_GENERATING_CONTEXT_SIZE,
-                                                                            model_name=PAGE_MODEL,
-                                                                            max_tokens=MAX_TOKENS)
+            content_list, image_files = generate_lecture_from_images_openai(
+                client,
+                merged_image_dir,
+                prompt=prompt,
+                textbook_indexer=textbook_indexer,  # Pass the indexer
+                context_size=TEXT_GENERATING_CONTEXT_SIZE,
+                model_name=PAGE_MODEL,
+                max_tokens=MAX_TOKENS
+            )
+
+            # Log generated content
+            for i, (content, image) in enumerate(zip(content_list, image_files)):
+                # logger.debug(f"Task {task_id}: Generated content for image {image}:")
+                # logger.debug("-" * 50)
+                # logger.debug(content)
+                # logger.debug("-" * 50)
+                pass
 
             # save each content into a separate file
             for i, content in enumerate(content_list):
@@ -299,9 +328,26 @@ def pdf2lec(_args, task_id, complexity=2):
                 complete_lecture += content
                 complete_lecture += "\n\n"
 
-            # Introduction
+            # Introduction generation
+            logger.debug(f"Task {task_id}: Using introduction prompt:")
+            logger.debug(get_introduction_prompt())
+
             introduction = digest_lecture_openai(
                 client, complete_lecture, get_introduction_prompt(), model_name=DIGEST_MODEL)
+
+            logger.debug(f"Task {task_id}: Generated introduction:")
+            logger.debug(introduction)
+
+            # Summary generation
+            logger.debug(f"Task {task_id}: Using summary prompt:")
+            logger.debug(get_summarizing_prompt())
+
+            summary = digest_lecture_openai(
+                client, complete_lecture, get_summarizing_prompt(), model_name=DIGEST_MODEL)
+
+            logger.debug(f"Task {task_id}: Generated summary:")
+            logger.debug(summary)
+
             # add the introduction to the beginning of the lecture
             content_list = [introduction] + content_list
             with open(f"{generated_lecture_dir}/lecture/introduction.txt", 'w', encoding='utf-8') as f:
@@ -376,6 +422,8 @@ def pdf2lec(_args, task_id, complexity=2):
         is_successful = True
         return METADATA # dict
     except Exception as e:
+        error_msg = f"Task {task_id} failed: {str(e)}\n{traceback.format_exc()}"
+        logger.error(error_msg)
         raise e
     finally:
         logger.info(f"Generation task {task_id} finished.")
@@ -391,7 +439,7 @@ def pdf2lec(_args, task_id, complexity=2):
             if Path(f"./data/{TIMESTAMP}").exists():
                 shutil.rmtree(f"./data/{TIMESTAMP}")
             # print("All generated files have been removed due to failure or interruption.")
-            logging.error(f"Task {task_id}: All generated files have been removed due to failure or interruption.")
+            logger.error(f"Task {task_id}: All generated files have been removed due to failure or interruption.")
 
 # if __name__ == "__main__":
 #     parser = argparse.ArgumentParser()
