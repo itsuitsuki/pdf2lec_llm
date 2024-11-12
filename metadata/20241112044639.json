@@ -1,0 +1,16 @@
+{
+    "title": "handout4_binary_hypothesis_testing",
+    "author": "default",
+    "timestamp": "20241112044639",
+    "pdf_src_path": "./test/handout4_binary_hypothesis_testing.pdf",
+    "similarity_threshold": 0.4,
+    "text_generating_context_size": 2,
+    "max_tokens": 1000,
+    "page_model": "gpt-4o",
+    "digest_model": "gpt-4o-mini",
+    "tts_model": "tts-1",
+    "tts_voice": "alloy",
+    "complexity": 2,
+    "use_rag": false,
+    "textbook_name": null
+}

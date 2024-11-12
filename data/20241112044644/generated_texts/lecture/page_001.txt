@@ -1,0 +1,13 @@
+Building on our discussion about classification, let’s explore how generative and discriminative models differ fundamentally in approach using the classification problem as a backdrop.
+
+In classification, unlike regression, we're not predicting a continuous value but rather assigning labels to inputs. Imagine you have images that you want to classify—not just into binary categories, like "cat" or "dog," but into multiple classes, like digits from zero to nine.
+
+Generative models, like our previously discussed Naive Bayes, take on the challenge of modeling the distribution of each class. A key feature of them is their ability to generate new instances that fit into any of these classes, much like learning the recipe to bake cookies of varying types and then actually baking them! They use a function represented as a set of parameters, say w, and data, to understand the entire distribution.
+
+On the other hand, discriminative models learn the boundary between classes. They focus directly on making decisions about class memberships, without delving into the data's full distribution. For example, logistic regression doesn't bake cookies; it just learns to identify them based on certain characteristics—whether it's chewy, chocolatey, or nutty.
+
+This image of classification illustrates the mapping where input data, like cholesterol levels or proteins, is mapped to binary outcomes, like zero or one. And it highlights scenarios where outcomes might not be binary, such as classifying handwritten digits.
+
+So, when you build a machine learning model, choosing between generative and discriminative depends on your need. Do you need insight into data generation and robustness against missing data—go generative. Or, if high-performance classification is the goal, discriminative might be your best bet!
+
+As we continue, keep in mind how these different models tackle problems and what benefits they might offer when faced with real-world data challenges.

@@ -7,10 +7,13 @@ import cv2
 import numpy as np
 from pathlib import Path
 import os
-from src.textbook_indexer import TextbookIndexer
+# from src.textbook_indexer import FAISSTextbookIndexer
+from utils.similarity import calculate_similarity
 from src.logger import CustomLogger
+import logging
 
-logger = CustomLogger.get_logger(__name__)
+# logger = CustomLogger.get_logger(__name__)
+logger = logging.getLogger("uvicorn")
 
 def analyze_page_by_image_openai(client, prompt, image_path, textbook_content=None, model_name="gpt-4o", max_tokens=500):
     """
@@ -82,36 +85,6 @@ def convert_pdf_to_images(pdf_path, output_dir):
         image_filename = f"page_{page_num+1}.png"
         pix.save(image_dir / image_filename)
     # print(f"PDF pages converted to images and saved to {output_dir}")
-        
-def calculate_similarity(img1, img2):
-    """
-    Calculate the similarity between two images using ORB feature matching.
-    This method is invariant to translation and rotation.
-    
-    :param img1: First image
-    :param img2: Second image
-    :return: A similarity score between 0 and 1
-    """
-    # Initialize ORB detector
-    orb = cv2.ORB_create()
-    
-    # Find the keypoints and descriptors with ORB
-    kp1, des1 = orb.detectAndCompute(img1, None)
-    kp2, des2 = orb.detectAndCompute(img2, None)
-    
-    # Create BFMatcher object
-    bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
-    
-    # Match descriptors
-    matches = bf.match(des1, des2)
-    
-    # Sort them in the order of their distance
-    matches = sorted(matches, key=lambda x: x.distance)
-    
-    # Calculate similarity score
-    similarity = len(matches) / max(len(kp1), len(kp2))
-    
-    return similarity
 
 def merge_similar_images(image_dir, output_dir, similarity_threshold=0.4):
     """
@@ -153,7 +126,7 @@ def merge_similar_images(image_dir, output_dir, similarity_threshold=0.4):
             merged = img
         else:
             images = [cv2.imread(os.path.join(image_dir, f)) for f in group]
-            heights = [img.shape[0] for img in images]
+            # heights = [img.shape[0] for img in images]
             max_width = max(img.shape[1] for img in images)
             merged = np.vstack([cv2.resize(img, (max_width, img.shape[0])) for img in images])
         
@@ -164,14 +137,14 @@ def merge_similar_images(image_dir, output_dir, similarity_threshold=0.4):
     
     # print(f"Merged images saved to {output_dir}")
     
-def generate_lecture_from_images_openai(client, image_dir, prompt, textbook_indexer=None, context_size=2, model_name="gpt-4o", max_tokens=500):
+def generate_lecture_from_images_openai(client, image_dir, prompt, faiss_textbook_indexer=None, context_size=2, model_name="gpt-4o", max_tokens=500):
     """
     Generate a complete lecture by analyzing images in sequence, maintaining context.
     
     :param client: OpenAI API client
     :param image_dir: Directory containing the merged images
     :param prompt: The base prompt to use for image analysis
-    :param textbook_indexer: Textbook indexer object
+    :param faiss_textbook_indexer: FAISS Textbook indexer object (short term, not persisted) # FIXME: need to update to PGVector indexer
     :param context_size: Number of previous slides to consider for context
     :param model_name: The name of the model to use
     :param max_tokens: The maximum number of tokens to generate
@@ -189,13 +162,13 @@ def generate_lecture_from_images_openai(client, image_dir, prompt, textbook_inde
         
         # Get relevant textbook content if available
         textbook_content = None
-        if textbook_indexer:
+        if faiss_textbook_indexer:
             # Extract text from image for query (you might need to implement this)
             # For now, we'll use the context as query
             query = " ".join(context[-2:]) if context else "Introduction to the topic"
-            textbook_content = textbook_indexer.get_relevant_content(
+            textbook_content = faiss_textbook_indexer.get_relevant_content(
                 query=query,
-                index_name=Path(textbook_indexer.textbook_path).stem
+                index_name=Path(faiss_textbook_indexer.textbook_path).stem
             )
             logger.debug(f"Textbook content: {textbook_content}")
         

@@ -7,7 +7,10 @@ MAIN_PORT=5000
 #     docker stop $CONTAINER_NAME
 #     docker rm $CONTAINER_NAME
 # fi
-sudo sysctl -w vm.overcommit_memory=1
+
+if [ $(sysctl -n vm.overcommit_memory) -ne 1 ]; then
+    sudo sysctl -w vm.overcommit_memory=1
+fi
 
 # first let the redis down
 

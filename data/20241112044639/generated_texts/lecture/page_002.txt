@@ -1,0 +1,13 @@
+Continuing our exploration of the Neyman-Pearson framework, let's break down the optimal decision rule by examining the current slide.
+
+Here, we encounter a pivotal concept — how to decide between \( H_0 \) and \( H_1 \) using the likelihood ratio \( L(x) \). The decision process involves a crucial threshold \( \Lambda \). If \( L(x) \) is less than \( \Lambda \), we accept the null hypothesis \( H_0 \). Conversely, if \( L(x) \) is greater than \( \Lambda \), we opt for the alternative hypothesis \( H_1 \). Now, there’s an interesting twist — when \( L(x) \) equals \( \Lambda \), we decide on \( H_1 \) with probability \( \alpha \) and on \( H_0 \) with probability \( 1-\alpha \).
+
+This nuanced rule is crafted to minimize the probability of a missed detection, calculated as \( P_1(L(x) < \Lambda) + (1-\alpha)P_1(L(x) = \Lambda) \). This careful calibration helps manage the delicate trade-off between false alarms and missed detections.
+
+The proof provided involves defining an alternative decision rule, \( \Delta \), and demonstrating through integration and expectation that our chosen rule, \( \Delta^* \), performs at least as well, ensuring the probability of a missed detection doesn’t increase.
+
+Let's dive into the example to see this in action. Imagine under \( H_0 \), our variable \( X \) follows a normal distribution with mean zero and standard deviation sigma. Under \( H_1 \), it follows a normal distribution with a different mean, mu, but the same variance. This scenario often represents detecting a signal within Gaussian noise.
+
+The likelihood ratio here becomes a function of \( x \), involving an exponent of terms that incorporate \( x \), the variance, and the mean difference. This expression guides our threshold test, enabling us to make informed decisions based on the observed value of \( x \).
+
+This example encapsulates how decision-making frameworks translate theory into practice, illuminating the critical role of hypothesis testing in fields ranging from signal processing to statistics. Understanding this empowers us to tackle real-world problems with a robust statistical toolkit.

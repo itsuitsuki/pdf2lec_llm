@@ -15,8 +15,8 @@ from concurrent.futures import ThreadPoolExecutor
 import asyncio
 from functools import partial
 import shutil
-import logging
 from src.logger import CustomLogger
+import logging
 
 # create a Redis client and FastAPI app
 redis_client = None
@@ -36,17 +36,19 @@ def configure_logging(debug_mode: bool):
 # Synchronous function to generate content
 def generate_content_sync(task_id: str, lec_args: LecGenerateArgs):
     try:
-        # 配置日志级别
-        configure_logging(lec_args.debug_mode)
-        logger = CustomLogger.get_logger("api")
+        # whether to enable debug logging
+        # configure_logging(lec_args.debug_mode)
+        # logger = CustomLogger.get_logger(__name__)
+        logger = logging.getLogger("uvicorn")
         logger.info(f"Starting new task with ID: {task_id}")
-        # 调用主要生成函数
-        metadata = pdf2lec(lec_args, task_id, complexity=lec_args.complexity)
-        # 更新 Redis 中的任务状态和结果
+        
+        # main logic to generate content
+        metadata = pdf2lec(lec_args, task_id)
+        # update the task status database
         redis_client.set(task_id, json.dumps({"status": "completed", "metadata": metadata}))
     except Exception as e:
         logger.error(f"Task {task_id} failed: {str(e)}")
-        # 在出错情况下将状态更新为 "failed"
+        # upon failure, update the task status database
         redis_client.set(task_id, json.dumps({"status": "failed", "error": str(e)}))
         
         
@@ -54,13 +56,25 @@ def generate_content_sync(task_id: str, lec_args: LecGenerateArgs):
 # POST /api/v1/lec_generate
 @app.post("/api/v1/lec_generate")
 async def lec_generate(lec_args: LecGenerateArgs):
-    # 配置日志级别
-    configure_logging(lec_args.debug_mode)
-    logger = CustomLogger.get_logger("api")
-    logger.info(f"Logger setup with debug mode")
+    # configure logging
+    # configure_logging(lec_args.debug_mode)
+    # logger = CustomLogger.get_logger(__name__)
+    logger = logging.getLogger("uvicorn")
+    # logger.info(f"Logger setup with debug mode")
+    if lec_args.debug_mode:
+        os.environ["TQDM_DISABLE"] = "0"
+    else:
+        os.environ["TQDM_DISABLE"] = "1"
+    
+    if lec_args.use_rag and lec_args.textbook_name is None:
+        raise HTTPException(status_code=400, detail="textbook_name must be provided if use_rag is True.")
+    
+    # TODO: Upon completion of prompts, delete this warning
+    if lec_args.complexity != 2:
+        logger.warning("Now we have only implemented complexity 2. The complexity parameter will be ignored.")
+        lec_args.complexity = 2
     # Unique task ID
     task_id = str(uuid.uuid4())
-    logger.info(f"Starting new task with ID: {task_id}")
     logger.debug(f"Task {task_id}: lec_args: {lec_args}")
     # 将任务状态设置为 "pending"
     redis_client.set(task_id, json.dumps({"status": "pending"}))
@@ -69,8 +83,12 @@ async def lec_generate(lec_args: LecGenerateArgs):
     # background_tasks.add_task(generate_content, task_id, lec_args)
     loop = asyncio.get_running_loop()
     loop.run_in_executor(executor, partial(generate_content_sync, task_id, lec_args))
+    # see how many tasks are pending from task status database
+
+
     
-    # 返回任务 ID 和初始状态
+    os.environ["TQDM_DISABLE"] = "1"
+    # return the task ID and initial status: pending
     return {"task_id": task_id, "status": "pending"}
 
 # GET request interface, get the task status
@@ -94,28 +112,49 @@ async def get_task_status(task_id: str):
         # otherwise, return the task status only
         return {"task_id": task_id, "status": task_info.get("status")}
 
+# GET statistics of tasks
+# GET /api/v1/all_task_stats
+@app.get("/api/v1/all_task_stats")
+async def get_task_stats():
+    all_pending = sum([1 for key in redis_client.keys() if json.loads(redis_client.get(key)).get("status") == "pending"])
+    still_waiting = executor._work_queue.qsize() # still waiting in the executor
+    logger = logging.getLogger("uvicorn")
+    logger.info(f"{all_pending} tasks pending at all; ")
+    logger.info(f"{still_waiting} tasks still waiting in the executor; ")
+    logger.info(f"{all_pending - still_waiting} tasks are in progress.")
+    
+    complete_count = sum([1 for key in redis_client.keys() if json.loads(redis_client.get(key)).get("status") == "completed"])
+    failed_count = sum([1 for key in redis_client.keys() if json.loads(redis_client.get(key)).get("status") == "failed"])
+    # logger.debug
+    logger.debug(f"{complete_count} tasks completed; ")
+    logger.debug(f"{failed_count} tasks failed.")
+    return {"all_pending": all_pending, "still_waiting": still_waiting, "in_progress": all_pending - still_waiting, "completed": complete_count, "failed": failed_count}
+    # return {"all_pending": all_pending, "still_waiting": still_waiting, "in_progress": all_pending - still_waiting}
 # DELETE /api/v1/clear_all_tasks
 @app.delete("/api/v1/clear_all_tasks")
 async def clear_redis_persistence():
+    cleared_count = len(redis_client.keys())
     redis_client.flushall()
-    return {"message": "Redis persistence cleared."}
+    return {"message": f"Redis persistence cleared. {cleared_count} tasks were removed."}
 
 # delete all failed tasks
 @app.delete("/api/v1/clear_failed_tasks")
 async def clear_failed_tasks():
+    cleared_count = 0
     for key in redis_client.keys():
         task_data = redis_client.get(key)
         task_info = json.loads(task_data)
         if task_info.get("status") == "failed":
+            cleared_count += 1
             redis_client.delete(key)
-    return {"message": "All failed tasks cleared."}
+    return {"message": f"All failed tasks cleared. {cleared_count} tasks were removed."}
 
 def set_pending_to_failed():
     for key in redis_client.keys():
         task_data = redis_client.get(key)
         task_info = json.loads(task_data)
         if task_info.get("status") == "pending":
-            print(f"Task {key} is pending, set to failed.")
+            logging.error(f"Task {key} is pending, set to failed.")
             redis_client.set(key, json.dumps({"status": "failed", "error": "Server shut down when the generation is on its way."}))
             
 # delete uncompleted tasks
@@ -133,6 +172,8 @@ def clear_uncompleted_data_sync():
     # find all metadata filenames in metadata/
     # if the metadata does not have a corresponding data/ subfolder, delete the metadata
     # if the subfolder/generated_audios does not contain combined.mp3, delete the subfolder and metadata
+    executor.shutdown(wait=False)
+    executor.shutdown(wait=False, cancel_futures=True)
     metadata_dir = "metadata/"
     data_dir = "data/"
     for metadata_filename in os.listdir(metadata_dir):
@@ -156,6 +197,9 @@ async def clear_uncompleted_data():
 
 def clear_all_data_sync():
     # remove everything in metadata/ and data/
+    # we end all executing tasks
+    executor.shutdown(wait=False)
+    executor.shutdown(wait=False, cancel_futures=True)
     metadata_dir = "metadata/"
     data_dir = "data/"
     for metadata_filename in os.listdir(metadata_dir):
@@ -170,15 +214,23 @@ async def clear_all_data():
     return {"message": "All data cleared."}
 
 if __name__ == "__main__":
+    
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=5000, help="The port to run the server.")
     parser.add_argument("--redis_port", type=int, default=6379, help="The port of the Redis server, should be referenced from the config.")
     parser.add_argument("--n_workers", type=int, default=4, help="The number of thread workers to use.")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging", default=False)
+    parser.add_argument("--custom_logger", action="store_true", help="Use custom logger", default=False)
+    
     args = parser.parse_args()
     
     # configure logging
-    configure_logging(args.debug)
+    if args.custom_logger:
+        configure_logging(args.debug)
+    if args.debug:
+        os.environ["TQDM_DISABLE"] = "0"
+    else:
+        os.environ["TQDM_DISABLE"] = "1"
     
     executor = ThreadPoolExecutor(max_workers=args.n_workers)
     redis_client = redis.Redis(host='localhost', port=args.redis_port, db=0)

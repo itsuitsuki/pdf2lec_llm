@@ -28,7 +28,9 @@ class CustomLogger:
             'openai',
             'urllib3',
             'requests',
-            'httpcore'
+            'httpcore',
+            'httpx',
+            'faiss'
         ]
         
         for logger_name in third_party_loggers:
@@ -49,7 +51,7 @@ class CustomLogger:
         console_handler = logging.StreamHandler()
         console_handler.setLevel(logging.DEBUG if debug_mode else logging.INFO)
         console_format = logging.Formatter(
-            '%(asctime)s - %(levelname)s - [%(name)s] - %(message)s'
+            '\033[1m%(levelname)s\033[0m:  \t %(asctime)s - [%(name)s] - %(message)s'
         )
         console_handler.setFormatter(console_format)
 
@@ -104,4 +106,4 @@ class CustomLogger:
             if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
                 handler.setLevel(logging.DEBUG if debug_mode else logging.INFO)
 
-logger = CustomLogger.get_logger("app")
+# logger = CustomLogger.get_logger(__name__)
