@@ -3,7 +3,7 @@ os.environ["TQDM_DISABLE"] = "1"
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
-from src.lec_gen_args import LecGenerateArgs
+from src.arg_models import LecGenerateArgs
 from src.pipeline import pdf2lec
 import uvicorn
 import argparse
@@ -17,11 +17,17 @@ from functools import partial
 import shutil
 from src.logger import CustomLogger
 import logging
+from utils.pdf_manipulation import extract_elements_from_pdf
+from src.arg_models import QAArgs
+from src.qa import single_gen_answer
 
 # create a Redis client and FastAPI app
 redis_client = None
+qa_redis_client = None
 app = FastAPI()
-executor = ThreadPoolExecutor(max_workers=4)
+n_workers = 4
+executor = ThreadPoolExecutor(max_workers=n_workers - n_workers // 2)
+qa_executor = ThreadPoolExecutor(max_workers=n_workers // 2)
 
 @app.exception_handler(ValidationError)
 async def validation_exception_handler(request: Request, exc: ValidationError):
@@ -69,10 +75,6 @@ async def lec_generate(lec_args: LecGenerateArgs):
     if lec_args.use_rag and lec_args.textbook_name is None:
         raise HTTPException(status_code=400, detail="textbook_name must be provided if use_rag is True.")
     
-    # TODO: Upon completion of prompts, delete this warning
-    if lec_args.complexity != 2:
-        logger.warning("Now we have only implemented complexity 2. The complexity parameter will be ignored.")
-        lec_args.complexity = 2
     # Unique task ID
     task_id = str(uuid.uuid4())
     logger.debug(f"Task {task_id}: lec_args: {lec_args}")
@@ -134,8 +136,9 @@ async def get_task_stats():
 @app.delete("/api/v1/clear_all_tasks")
 async def clear_redis_persistence():
     cleared_count = len(redis_client.keys())
-    redis_client.flushall()
-    return {"message": f"Redis persistence cleared. {cleared_count} tasks were removed."}
+    qa_cleared_count = len(qa_redis_client.keys())
+    redis_client.flushall() # flush all databases
+    return {"message": f"Redis persistence cleared. {cleared_count} tasks were removed. {qa_cleared_count} QA subtasks were removed."}
 
 # delete all failed tasks
 @app.delete("/api/v1/clear_failed_tasks")
@@ -147,33 +150,51 @@ async def clear_failed_tasks():
         if task_info.get("status") == "failed":
             cleared_count += 1
             redis_client.delete(key)
-    return {"message": f"All failed tasks cleared. {cleared_count} tasks were removed."}
+    qa_cleared_count = 0
+    for key in qa_redis_client.keys():
+        task_data = qa_redis_client.get(key)
+        task_info = json.loads(task_data)
+        if task_info.get("status") == "failed":
+            qa_cleared_count += 1
+            qa_redis_client.delete(key)
+    return {"message": f"All failed tasks cleared. {cleared_count} tasks were removed. {qa_cleared_count} QA subtasks were removed."}
 
-def set_pending_to_failed():
+def main_redis_set_panding_to_failed():
     for key in redis_client.keys():
         task_data = redis_client.get(key)
         task_info = json.loads(task_data)
         if task_info.get("status") == "pending":
-            logging.error(f"Task {key} is pending, set to failed.")
+            # logging.info(f"Task {key} is pending, set to failed.")
             redis_client.set(key, json.dumps({"status": "failed", "error": "Server shut down when the generation is on its way."}))
             
 # delete uncompleted tasks
 @app.delete("/api/v1/clear_uncompleted_tasks")
 async def clear_uncompleted_tasks():
+    cleared_count = 0
     for key in redis_client.keys():
         task_data = redis_client.get(key)
         task_info = json.loads(task_data)
         if task_info.get("status") != "completed":
+            cleared_count += 1
             redis_client.delete(key)
-    return {"message": "All uncompleted tasks cleared."}
+    qa_cleared_count = 0
+    for key in qa_redis_client.keys():
+        task_data = qa_redis_client.get(key)
+        task_info = json.loads(task_data)
+        if task_info.get("status") != "completed":
+            qa_cleared_count += 1
+            qa_redis_client.delete(key)
+    return {"message": f"All uncompleted tasks cleared. {cleared_count} tasks were removed. {qa_cleared_count} QA subtasks were removed."}
 
 def clear_uncompleted_data_sync():
     # delete uncompleted data/ folders & metadata
     # find all metadata filenames in metadata/
     # if the metadata does not have a corresponding data/ subfolder, delete the metadata
     # if the subfolder/generated_audios does not contain combined.mp3, delete the subfolder and metadata
+    global executor
     executor.shutdown(wait=False)
     executor.shutdown(wait=False, cancel_futures=True)
+    executor = ThreadPoolExecutor(max_workers=n_workers)
     metadata_dir = "metadata/"
     data_dir = "data/"
     for metadata_filename in os.listdir(metadata_dir):
@@ -198,8 +219,10 @@ async def clear_uncompleted_data():
 def clear_all_data_sync():
     # remove everything in metadata/ and data/
     # we end all executing tasks
+    global executor
     executor.shutdown(wait=False)
     executor.shutdown(wait=False, cancel_futures=True)
+    executor = ThreadPoolExecutor(max_workers=n_workers)
     metadata_dir = "metadata/"
     data_dir = "data/"
     for metadata_filename in os.listdir(metadata_dir):
@@ -212,6 +235,88 @@ def clear_all_data_sync():
 async def clear_all_data():
     clear_all_data_sync()
     return {"message": "All data cleared."}
+
+def qa_sync(qa_args: QAArgs, qa_task_id: str):
+    logger = logging.getLogger("uvicorn")
+    logger.info(f"Task {qa_args.task_id}: Question asked: {qa_args.question}")
+
+    task_data = redis_client.get(qa_args.task_id)
+    if task_data is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    task_info = json.loads(task_data)
+    metadata = task_info.get("metadata")
+    pdf_path = metadata.get("pdf_src_path")
+    timestamp = metadata.get("timestamp")
+    transcript_path = os.path.join("data", timestamp, "generated_texts", "lecture_with_summary.txt")
+
+    if not os.path.exists(transcript_path):
+        raise HTTPException(status_code=404, detail="Summary file not found")
+    with open(transcript_path, 'r') as f:
+        transcript = f.read()
+    logger.info(f"Task {qa_args.task_id}: Transcript loaded.")
+    pdf_content = extract_elements_from_pdf(pdf_path)
+    logger.info(f"Task {qa_args.task_id}: PDF content extracted.")
+
+    # qa_context is a list of dict of {"role": "user" or "assistant", "content": str of question or answer}
+    qa_context_path = os.path.join("data", timestamp, "qa_context.json")
+    if os.path.exists(qa_context_path):
+        with open(qa_context_path, 'r') as f:
+            qa_context = json.load(f)
+    else:
+        qa_context = None
+    logger.info(f"Task {qa_args.task_id}: QA context loaded.")
+    try:
+        answer, qa_context_updated = single_gen_answer(qa_args, pdf_content, transcript, qa_context)
+        # qa_context_updated: list of dict of {"role": "user" or "assistant", "content": str of question or answer}
+        # save the updated qa_context to data/timestamp/qa_context.json
+        # qa_context_path = os.path.join("data", timestamp, "qa_context.json")
+        with open(qa_context_path, 'w') as f:
+            json.dump(qa_context_updated, f)
+        logger.info(f"Task {qa_args.task_id}: QA context updated and saved.")
+        
+        qa_redis_client.set(qa_task_id, json.dumps({"qa_task_id": qa_task_id, "status": "completed", "question": qa_args.question, "answer": answer, "qa_args": qa_args.model_dump()}))
+        logger.info(f"Task {qa_args.task_id}: QA completed.")
+    except RuntimeError as e:
+        logger.error(f"Question answering failed: {str(e)}")
+        qa_redis_client.set(qa_task_id, json.dumps({"qa_task_id": qa_task_id, "status": "failed", "error": str(e), "question": qa_args.question, "qa_args": qa_args.model_dump()}))
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/ask_question")
+async def ask_question(qa_args: QAArgs):
+    loop = asyncio.get_running_loop()
+    # if qa_args.task_id as a value in qa_redis_client is pending, don't start a new task
+    for key in qa_redis_client.keys():
+        task_data = json.loads(qa_redis_client.get(key))
+        if task_data.get("qa_args")["task_id"] == qa_args.task_id and task_data.get("status") == "pending":
+            raise HTTPException(status_code=400, detail="Task already pending.")
+    subtask_id = str(uuid.uuid4())
+    task_data = redis_client.get(qa_args.task_id)
+    if task_data is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    task_info = json.loads(task_data)
+    if task_info.get("status") != "completed":
+        raise HTTPException(status_code=400, detail="Task is not completed")
+    loop.run_in_executor(qa_executor, partial(qa_sync, qa_args, subtask_id))
+    logger = logging.getLogger("uvicorn")
+    logger.info(f"Task {qa_args.task_id}: QA subtask {subtask_id} started.")
+    
+    # return {"task_id": qa_args.task_id, "question": qa_args.question, "answer": answer}
+    qa_redis_client.set(subtask_id, json.dumps({"qa_task_id": subtask_id, "status": "pending", "question": qa_args.question, "qa_args": qa_args.model_dump()}))
+    return {"qa_task_id": subtask_id, "status": "pending", "question": qa_args.question, "qa_args": qa_args.model_dump()}
+
+@app.get("/api/v1/qa_task_status/{qa_task_id}")
+async def get_qa_task_status(qa_task_id: str):
+    task_data = qa_redis_client.get(qa_task_id)
+    if task_data is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    task_info = json.loads(task_data)
+    if task_info.get("status") == "completed":
+        return {"qa_task_id": qa_task_id, "status": "completed", "question": task_info.get("question"), "answer": task_info.get("answer")}
+    elif task_info.get("status") == "failed":
+        return {"qa_task_id": qa_task_id, "status": "failed", "error": task_info.get("error"), "question": task_info.get("question"), "qa_args": task_info.get("qa_args")}
+    else:
+        return {"qa_task_id": qa_task_id, "status": task_info.get("status"), "question": task_info.get("question"), "qa_args": task_info.get("qa_args")}
 
 if __name__ == "__main__":
     
@@ -231,14 +336,20 @@ if __name__ == "__main__":
         os.environ["TQDM_DISABLE"] = "0"
     else:
         os.environ["TQDM_DISABLE"] = "1"
-    
-    executor = ThreadPoolExecutor(max_workers=args.n_workers)
+
+    n_workers = args.n_workers
+    executor = ThreadPoolExecutor(max_workers=n_workers)
     redis_client = redis.Redis(host='localhost', port=args.redis_port, db=0)
+    qa_redis_client = redis.Redis(host='localhost', port=args.redis_port, db=1) # db=1 for QA
     # delete all uncompleted data
     clear_uncompleted_data_sync()
 
+    # register atexit functions
+    # register flushall for qa_redis_client
+    # only flush db=1
+    atexit.register(lambda: qa_redis_client.flushdb())
     atexit.register(clear_uncompleted_data_sync)
-    atexit.register(set_pending_to_failed)
+    atexit.register(main_redis_set_panding_to_failed)
     atexit.register(lambda: redis_client.close())
     
     uvicorn.run(app, host="0.0.0.0", port=args.port)

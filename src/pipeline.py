@@ -110,6 +110,7 @@ def pdf2lec(_args, task_id):
 
             # Select the appropriate prompt based on the complexity parameter
             prompt = get_each_slide_prompt(COMPLEXITY)
+            
 
             content_list, _ = generate_lecture_from_images_openai(
                 client,

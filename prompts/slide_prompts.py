@@ -20,9 +20,9 @@ def get_each_slide_prompt(complexity):
     if complexity == 1:
         return get_brief_prompt()
     elif complexity == 2:
-        return get_detailed_prompt()
-    elif complexity == 3:
         return get_default_prompt()
+    elif complexity == 3:
+        return get_detailed_prompt()
     else:
         raise ValueError(f"Invalid complexity value {complexity}. Must be 1, 2, or 3.")
         

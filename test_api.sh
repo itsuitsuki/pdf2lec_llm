@@ -15,7 +15,7 @@
 #     textbook_name: str = Field(None, description="The name of the textbook PDF file. Must be provided if use_rag is True.")
 #     openai_api_key: str = Field(None, description="OpenAI API key. If not provided, the API key from the environment variable OPENAI_API_KEY will be used.")
 
-curl -X POST http://localhost:5000/lec_generate \
+curl -X POST http://localhost:5000/api/v1/lec_generate \
 -H "Content-Type: application/json" \
 -d '{
     "similarity_threshold": 0.4,
@@ -32,18 +32,13 @@ curl -X POST http://localhost:5000/lec_generate \
     "textbook_name": "Deep Learning Foundations and Concepts (Christopher M. Bishop, Hugh Bishop) (Z-Library)",
     "openai_api_key": null
 }'
-# curl -X POST http://localhost:5000/lec_generate \
-# -H "Content-Type: application/json" \
-# -d '{
-#     "similarity_threshold": 0.4,
-#     "text_generating_context_size": 2,
-#     "max_tokens": 1000,
-#     "pdf_name": "L6-Classsification-917",
-#     "textbook_name": "Deep Learning Foundations and Concepts (Christopher M. Bishop, Hugh Bishop) (Z-Library)",
-#     "page_model": "gpt-4o",
-#     "digest_model": "gpt-4o-mini",
-#     "tts_model": "tts-1",
-#     "tts_voice": "alloy",
-#     "debug_mode": true,
-#     "complexity": 2
-# }'
+
+curl -X POST "http://localhost:5000/api/v1/ask_question" \
+-H "Content-Type: application/json" \
+-d '{
+    "question": "What is a posterior probability?",
+    "task_id": "43ae4fe0-7e0a-4988-bf04-e6ec1f0978fe",
+    "max_tokens": 150,
+    "qa_model": "gpt-4-turbo",
+    "openai_api_key": null
+}'

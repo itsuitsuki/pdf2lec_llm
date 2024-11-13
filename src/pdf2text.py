@@ -1,4 +1,4 @@
-from utils.encode_image_to_base64 import encode_image_to_base64
+from utils.encode_image_to_base64 import encode_image_path_to_base64
 from openai import OpenAI
 from pathlib import Path
 from tqdm import tqdm
@@ -29,14 +29,8 @@ def analyze_page_by_image_openai(client, prompt, image_path, textbook_content=No
     """
     
     # Encode the image
-    base64_image = encode_image_to_base64(image_path)
-    
-    # Modify prompt to include textbook content if available
-    enhanced_prompt = prompt
-    if textbook_content:
-        enhanced_prompt += "\n\nRelevant textbook content:\n" + "\n".join(textbook_content)
-        enhanced_prompt += "\n\nPlease incorporate relevant information from the textbook in your explanation."
-    logger.debug(f"Enhanced prompt: {enhanced_prompt}")
+    base64_image = encode_image_path_to_base64(image_path)
+
     try:
         response = client.chat.completions.create(
             model=model_name,
@@ -44,7 +38,7 @@ def analyze_page_by_image_openai(client, prompt, image_path, textbook_content=No
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": enhanced_prompt},
+                        {"type": "text", "text": prompt},
                         {
                             "type": "image_url",
                             "image_url": {
@@ -59,7 +53,7 @@ def analyze_page_by_image_openai(client, prompt, image_path, textbook_content=No
         )
         return response.choices[0].message.content
     except Exception as e:
-        return f"Error: {str(e)}"
+        raise e
 
 def convert_pdf_to_images(pdf_path, output_dir):
     """
@@ -169,16 +163,23 @@ def generate_lecture_from_images_openai(client, image_dir, prompt, faiss_textboo
             textbook_content = faiss_textbook_indexer.get_relevant_content(
                 query=query,
                 index_name=Path(faiss_textbook_indexer.textbook_path).stem
-            )
+            ) # List[str]
             logger.debug(f"Textbook content: {textbook_content}")
         
         context_prompt = f"{prompt}\n\nContext from previous slides:\n{' '.join(context)}\n\nAnalyze the current slide in the context of what has been discussed before. Remember do not repeat the same information."
+            
+        # Modify prompt to include textbook content if available
+        enhanced_prompt = context_prompt
+        if textbook_content:
+            enhanced_prompt += "\n\nRelevant textbook content:\n" + "\n".join(textbook_content)
+            enhanced_prompt += "\n\nPlease incorporate relevant information from the textbook in your explanation."
+        logger.debug(f"Enhanced prompt: {enhanced_prompt}")
+        
         
         slide_content = analyze_page_by_image_openai(
             client, 
-            context_prompt, 
+            enhanced_prompt, 
             image_path, 
-            textbook_content=textbook_content,
             model_name=model_name, 
             max_tokens=max_tokens
         )
