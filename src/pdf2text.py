@@ -80,7 +80,7 @@ def convert_pdf_to_images(pdf_path, output_dir):
         pix.save(image_dir / image_filename)
     # print(f"PDF pages converted to images and saved to {output_dir}")
 
-def merge_similar_images(image_dir, output_dir, similarity_threshold=0.4):
+def merge_similar_images(image_dir, output_dir, similarity_threshold=0.4, max_merge=4):
     """
     Merge similar consecutive images in a directory while maintaining the original order.
     
@@ -98,6 +98,11 @@ def merge_similar_images(image_dir, output_dir, similarity_threshold=0.4):
     current_group = [image_files[0]]
     
     for i in range(len(image_files) - 1):
+        if len(current_group) >= max_merge:
+            merged_groups.append(current_group)
+            current_group = [image_files[i+1]]
+            continue
+            
         img1 = cv2.imread(os.path.join(image_dir, image_files[i]))
         img2 = cv2.imread(os.path.join(image_dir, image_files[i+1]))
         
@@ -116,14 +121,36 @@ def merge_similar_images(image_dir, output_dir, similarity_threshold=0.4):
     # Merge and save images
     for i, group in enumerate(merged_groups):
         if len(group) == 1:
-            img = cv2.imread(os.path.join(image_dir, group[0]))
-            merged = img
+            merged = cv2.imread(os.path.join(image_dir, group[0]))
         else:
             images = [cv2.imread(os.path.join(image_dir, f)) for f in group]
-            # heights = [img.shape[0] for img in images]
+            
+            # 计算目标尺寸
+            max_height = max(img.shape[0] for img in images)
             max_width = max(img.shape[1] for img in images)
-            merged = np.vstack([cv2.resize(img, (max_width, img.shape[0])) for img in images])
-        
+            
+            if len(group) == 2:
+                # 两张图片横向排列
+                resized_images = [cv2.resize(img, (max_width, max_height)) for img in images]
+                merged = np.hstack(resized_images)
+                
+            elif len(group) == 3:
+                # 前两张横向，第三张在下方
+                img1, img2, img3 = images
+                # 调整前两张图片大小并横向合并
+                resized_top = [cv2.resize(img, (max_width, max_height)) for img in [img1, img2]]
+                top_row = np.hstack(resized_top)
+                # 调整第三张图片大小以匹配上方宽度
+                bottom_img = cv2.resize(img3, (top_row.shape[1], max_height))
+                merged = np.vstack([top_row, bottom_img])
+                
+            elif len(group) == 4:
+                # 2x2 网格排列
+                resized_images = [cv2.resize(img, (max_width, max_height)) for img in images]
+                top_row = np.hstack([resized_images[0], resized_images[1]])
+                bottom_row = np.hstack([resized_images[2], resized_images[3]])
+                merged = np.vstack([top_row, bottom_row])
+
         # Use the first image's number in the group for naming
         first_num = int(group[0].split('_')[1].split('.')[0])
         cv2.imwrite(os.path.join(output_dir, f'merged_{first_num:03d}.png'), merged)
