@@ -52,14 +52,15 @@ def pdf2lec(_args, task_id):
             "complexity": COMPLEXITY,
             "use_rag": _args.use_rag,
             "textbook_name": _args.textbook_name,
+            "audio_timestamps": []
         }
         # save the metadata to metadata/{TIMESTAMP}.json
         metadata_dir = f"./metadata"
         Path(metadata_dir).mkdir(parents=True, exist_ok=True)
         metadata_file = f"{metadata_dir}/{TIMESTAMP}.json"
-        # save the metadata to a json file
-        with open(metadata_file, 'w', encoding='utf-8') as f:
-            json.dump(METADATA, f, ensure_ascii=False, indent=4)
+        # save the metadata to a json file (save later)
+        # with open(metadata_file, 'w', encoding='utf-8') as f:
+        #     json.dump(METADATA, f, ensure_ascii=False, indent=4)
         client = OpenAI(api_key=_args.openai_api_key)
 
         logger.debug(f"Task {task_id}: Starting with configuration: {json.dumps(METADATA, indent=2)}")
@@ -228,13 +229,24 @@ def pdf2lec(_args, task_id):
         # print("===== Merging Audio Files =====")
         logger.info(f"Task {task_id}: Merging Audio Files")
         combined = AudioSegment.empty()
+        current_position = 0  
+        audio_timestamps = [0]  
+
         for file in audio_files:
             audio_segment = AudioSegment.from_mp3(file)
-            combined += audio_segment  # Concatenate audio files
+            combined += audio_segment
+            current_position += len(audio_segment)  # len() returns the number of milliseconds
+            audio_timestamps.append(current_position)
+
+        audio_timestamps.pop()
+        logger.debug(f"Task {task_id}: Audio timestamps: {audio_timestamps}")
+        METADATA["audio_timestamps"] = audio_timestamps
+
         final_output_path = f"{audio_dir}/combined.mp3"
         combined.export(final_output_path, format="mp3", bitrate="192k")
 
-        # print(f"All audio files have been merged into one file: {final_output_path}")
+        with open(metadata_file, 'w', encoding='utf-8') as f:
+            json.dump(METADATA, f, ensure_ascii=False, indent=4)
         logger.info(f"Task {task_id}: All audio files have been merged into one file: {final_output_path}")
         is_successful = True
         return METADATA # dict

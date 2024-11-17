@@ -21,24 +21,24 @@ curl -X POST http://localhost:5000/api/v1/lec_generate \
     "similarity_threshold": 0.4,
     "text_generating_context_size": 2,
     "max_tokens": 1000,
-    "pdf_name": "L6-Classsification-917",
+    "pdf_name": "L6-Classsification-917_1-5",
     "page_model": "gpt-4o",
     "digest_model": "gpt-4o-mini",
     "tts_model": "tts-1",
     "tts_voice": "alloy",
     "complexity": 2,
-    "debug_mode": false,
-    "use_rag": false,
+    "debug_mode": true,
+    "use_rag": true,
     "textbook_name": "Deep Learning Foundations and Concepts (Christopher M. Bishop, Hugh Bishop) (Z-Library)",
     "openai_api_key": null
 }'
 
-curl -X POST "http://localhost:5000/api/v1/ask_question" \
--H "Content-Type: application/json" \
--d '{
-    "question": "What is a posterior probability?",
-    "task_id": "43ae4fe0-7e0a-4988-bf04-e6ec1f0978fe",
-    "max_tokens": 150,
-    "qa_model": "gpt-4-turbo",
-    "openai_api_key": null
-}'
+# curl -X POST "http://localhost:5000/api/v1/ask_question" \
+# -H "Content-Type: application/json" \
+# -d '{
+#     "question": "What is a posterior probability?",
+#     "task_id": "43ae4fe0-7e0a-4988-bf04-e6ec1f0978fe",
+#     "max_tokens": 150,
+#     "qa_model": "gpt-4-turbo",
+#     "openai_api_key": null
+# }'
