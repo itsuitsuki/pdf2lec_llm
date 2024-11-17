@@ -1,0 +1,112 @@
+.display-container {
+  padding: 32px 0px;
+}
+
+.grid-container {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr); /* 3 equal columns */
+  grid-template-rows: repeat(3, 1fr); /* 3 equal rows */
+}
+
+.grid-item {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #f0f0f0;
+  border: 1px solid #ddd;
+  height: 100px; /* Adjust the height of each grid item */
+  text-align: center;
+}
+
+.carousel-container {
+  width: 50vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.hover-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 45vw; /* Matches slide-viewer width */
+  margin-bottom: 16px;
+}
+
+.slide-viewer {
+  width: 100%; /* Takes the width of hover-container */
+  height: 50vh;
+  overflow: hidden;
+}
+
+.thumbnail-container {
+  background-color: #efefef;
+  padding: 6px 0px;
+  display: flex;
+  justify-content: space-evenly;
+  margin-bottom: 20px;
+  max-width: 50vw;
+}
+
+.thumbnail-container.collapsed {
+  height: 0; /* Collapse height */
+  opacity: 0; 
+  overflow: hidden;
+}
+
+.thumbnail-container img {
+  cursor: pointer;
+  border: 1px solid gray;
+  box-shadow: inset 0px 0px 10px rgba(0, 0, 0, 0.5);
+}
+
+.collapsed-hover-container:hover .centered-button {
+    opacity: 1;
+}
+
+.centered-button {
+  position: absolute; /* Position the button absolutely within the container */
+  top: 15%;
+  left: 50%; /* Horizontally center */
+  transform: translate(-50%, -50%); /* Adjust for the exact center */
+  padding: 8px 20px;
+  background-color: rgb(97, 97, 97); /* Example background color */
+  color: white;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  z-index: 10; /* Ensure the button is above the thumbnails */
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.icon-container {
+  display: flex;
+  width: 100%;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.audio-player {
+  position: absolute;
+  bottom: 10px;
+  width: 95%;
+  opacity: 0;
+  transition: opacity 0.3s;
+  height: 5vh;
+}
+
+.hover-container:hover .audio-player {
+  opacity: 1; /* Show audio player on hover over the slide */
+  cursor: pointer;
+}
+
+.transcript-container {
+  flex-grow: 1;
+  background-color: #f0f0f0; /* Example styling */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
