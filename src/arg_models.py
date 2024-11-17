@@ -21,3 +21,8 @@ class QAArgs(BaseModel):
     max_tokens: int = Field(..., description="The maximum number of tokens for text generation.")
     qa_model: str = Field(..., description="The model name for generating the answer.")
     openai_api_key: Optional[str] = Field(None, description="OpenAI API key. If not provided, the API key from the environment variable OPENAI_API_KEY will be used.")
+    
+class PDFSplitMergeArgs(BaseModel):
+    pdf_name: str = Field(..., description="The name of the PDF file.")
+    similarity_threshold: float = Field(default=0.4, description="The similarity threshold to merge similar images.")
+    debug_mode: bool = Field(default=False, description="Enable debug logging.")

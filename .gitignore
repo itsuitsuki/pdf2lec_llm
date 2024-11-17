@@ -2,6 +2,8 @@
 redis/
 redis/*
 .vscode/
+metadata/
+data/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

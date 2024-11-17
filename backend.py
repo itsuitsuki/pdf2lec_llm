@@ -3,7 +3,7 @@ os.environ["TQDM_DISABLE"] = "1"
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
-from src.arg_models import LecGenerateArgs
+from src.arg_models import LecGenerateArgs, PDFSplitMergeArgs
 from src.pipeline import pdf2lec
 import uvicorn
 import argparse
@@ -20,6 +20,8 @@ import logging
 from utils.pdf_manipulation import extract_elements_from_pdf
 from src.arg_models import QAArgs
 from src.qa import single_gen_answer
+import datetime
+from src.pdf2text import convert_pdf_to_images, merge_similar_images
 
 # create a Redis client and FastAPI app
 redis_client = None
@@ -317,6 +319,62 @@ async def get_qa_task_status(qa_task_id: str):
         return {"qa_task_id": qa_task_id, "status": "failed", "error": task_info.get("error"), "question": task_info.get("question"), "qa_args": task_info.get("qa_args")}
     else:
         return {"qa_task_id": qa_task_id, "status": task_info.get("status"), "question": task_info.get("question"), "qa_args": task_info.get("qa_args")}
+
+def split_merge_pdf_sync(task_id: str, args: PDFSplitMergeArgs):
+    try:
+        logger = logging.getLogger("uvicorn")
+        logger.info(f"Starting PDF split-merge task with ID: {task_id}")
+        
+        # Generate timestamp for unique directory
+        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        pdf_path = f"./test/{args.pdf_name}.pdf"
+        image_dir = f"./data/{timestamp}/images"
+        merged_image_dir = f"./data/{timestamp}/merged_images"
+        
+        # Convert PDF to images
+        convert_pdf_to_images(pdf_path, image_dir)
+        logger.info(f"Task {task_id}: PDF converted to images")
+        
+        # Merge similar images
+        merge_similar_images(image_dir, merged_image_dir, 
+                           similarity_threshold=args.similarity_threshold)
+        logger.info(f"Task {task_id}: Similar images merged")
+        
+        metadata = {
+            "timestamp": timestamp,
+            "pdf_src_path": pdf_path,
+            "image_dir": image_dir,
+            "merged_image_dir": merged_image_dir,
+            "similarity_threshold": args.similarity_threshold
+        }
+        
+        redis_client.set(task_id, json.dumps({"status": "completed", "metadata": metadata}))
+        
+    except Exception as e:
+        logger.error(f"Task {task_id} failed: {str(e)}")
+        redis_client.set(task_id, json.dumps({"status": "failed", "error": str(e)}))
+
+@app.post("/api/v1/split_merge_pdf")
+async def split_merge_pdf(args: PDFSplitMergeArgs):
+    logger = logging.getLogger("uvicorn")
+    
+    if args.debug_mode:
+        os.environ["TQDM_DISABLE"] = "0"
+    else:
+        os.environ["TQDM_DISABLE"] = "1"
+    
+    # Generate unique task ID
+    task_id = str(uuid.uuid4())
+    logger.debug(f"Task {task_id}: split_merge_args: {args}")
+    
+    # Set initial task status
+    redis_client.set(task_id, json.dumps({"status": "pending"}))
+    
+    # Run the task in background
+    loop = asyncio.get_running_loop()
+    loop.run_in_executor(executor, partial(split_merge_pdf_sync, task_id, args))
+    
+    return {"task_id": task_id, "status": "pending"}
 
 if __name__ == "__main__":
     
