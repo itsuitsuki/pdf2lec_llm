@@ -1,6 +1,6 @@
 import os
 os.environ["TQDM_DISABLE"] = "1"
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from src.arg_models import LecGenerateArgs, PDFSplitMergeArgs
@@ -22,6 +22,10 @@ from src.arg_models import QAArgs
 from src.qa import single_gen_answer
 import datetime
 from src.pdf2text import convert_pdf_to_images, merge_similar_images
+from typing import List
+from mimetypes import guess_type
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 # create a Redis client and FastAPI app
 redis_client = None
@@ -30,6 +34,16 @@ app = FastAPI()
 n_workers = 4
 executor = ThreadPoolExecutor(max_workers=n_workers - n_workers // 2)
 qa_executor = ThreadPoolExecutor(max_workers=n_workers // 2)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.mount("/data", StaticFiles(directory="data"), name="data")
 
 @app.exception_handler(ValidationError)
 async def validation_exception_handler(request: Request, exc: ValidationError):
@@ -375,6 +389,195 @@ async def split_merge_pdf(args: PDFSplitMergeArgs):
     loop.run_in_executor(executor, partial(split_merge_pdf_sync, task_id, args))
     
     return {"task_id": task_id, "status": "pending"}
+
+class FileValidator:
+    MAX_FILE_SIZE = 30 * 1024 * 1024  
+    ALLOWED_TYPES = ["application/pdf"]
+    
+    @staticmethod
+    def sanitize_filename(filename: str) -> str:
+        # Remove potentially problematic characters, keeping only alphanumeric, dash, underscore
+        import re
+        # Get the name and extension separately
+        name, ext = os.path.splitext(filename)
+        # Replace dots with empty string in the name part only
+        clean_name = name.replace('.', '')
+        # Return the cleaned name with the original extension
+        return f"{clean_name}{ext}"
+    
+    @classmethod
+    def validate(cls, file: UploadFile, file_type: str) -> bool:
+        # Check file type
+        content_type = guess_type(file.filename)[0]
+        if content_type not in cls.ALLOWED_TYPES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File type not allowed. Must be one of: {cls.ALLOWED_TYPES}"
+            )
+        
+        # Check file size
+        file.file.seek(0, 2)
+        size = file.file.tell()
+        file.file.seek(0)
+        
+        # Allow larger file size for textbooks
+        max_size = cls.MAX_FILE_SIZE * 3 if file_type == "textbook" else cls.MAX_FILE_SIZE
+        
+        if size > max_size:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File too large. Maximum size is {max_size/1024/1024}MB"
+            )
+        
+        return True
+
+@app.post("/api/v1/upload-slide")
+async def upload_slide(file: UploadFile = File(...)):
+    """Upload slide PDF file"""
+    logger = logging.getLogger("uvicorn")
+    try:
+        FileValidator.validate(file, "slide")
+        os.makedirs("./data/user_uploaded_slide_pdf", exist_ok=True)
+        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        sanitized_filename = FileValidator.sanitize_filename(file.filename)
+        filename = f"{timestamp}_{sanitized_filename}"
+        file_path = os.path.join("./data/user_uploaded_slide_pdf", filename)
+        
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        # Return a JSONResponse with proper headers
+        return JSONResponse(
+            content={
+                "id": timestamp,
+                "filename": sanitized_filename,  # Return original filename for display
+                "path": file_path,
+                "type": "slide",
+                "message": "File uploaded successfully"
+            },
+            status_code=200
+        )
+    except HTTPException as e:
+        logger.error(f"File validation failed: {str(e)}")
+        return JSONResponse(
+            content={"detail": str(e.detail)},
+            status_code=e.status_code
+        )
+    except Exception as e:
+        logger.error(f"File upload failed: {str(e)}")
+        return JSONResponse(
+            content={"detail": str(e)},
+            status_code=500
+        )
+
+@app.post("/api/v1/upload-textbook")
+async def upload_textbook(file: UploadFile = File(...)):
+    """Upload textbook PDF file"""
+    logger = logging.getLogger("uvicorn")
+    try:
+        FileValidator.validate(file, "textbook")
+        os.makedirs("./data/user_uploaded_textbook_pdf", exist_ok=True)
+        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        sanitized_filename = FileValidator.sanitize_filename(file.filename)
+        filename = f"{timestamp}_{sanitized_filename}"
+        file_path = os.path.join("./data/user_uploaded_textbook_pdf", filename)
+        
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        return {
+            "id": timestamp,
+            "filename": filename,
+            "path": file_path,
+            "type": "textbook"
+        }
+    except HTTPException as e:
+        logger.error(f"File validation failed: {str(e)}")
+        raise e
+    except Exception as e:
+        logger.error(f"File upload failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/pdfs/{file_type}")
+async def get_pdfs(file_type: str) -> List[dict]:
+    """Get list of PDFs by type"""
+    logger = logging.getLogger("uvicorn")
+    try:
+        if file_type not in ["slide", "textbook"]:
+            raise HTTPException(status_code=400, detail="Invalid file type")
+            
+        dir_path = f"./data/user_uploaded_{file_type}_pdf"
+        logger.debug(f"Searching for PDFs in directory: {dir_path}")
+        
+        if not os.path.exists(dir_path):
+            logger.debug(f"Directory {dir_path} does not exist")
+            return []
+            
+        files = []
+        for filename in os.listdir(dir_path):
+            if filename.endswith(".pdf"):
+                timestamp = filename.split("_")[0]
+                file_path = os.path.join(dir_path, filename)
+                relative_path = os.path.relpath(file_path, ".")
+                files.append({
+                    "id": timestamp,
+                    "filename": filename,
+                    "path": f"/data/{relative_path}",  # 修改为正确的静态文件路径
+                    "type": file_type
+                })
+                logger.debug(f"Found PDF file: {filename}, path: {relative_path}")
+        
+        return JSONResponse(
+            content=files,
+            headers={
+                "Access-Control-Allow-Origin": "http://127.0.0.1:5173",
+                "Access-Control-Allow-Credentials": "true",
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error getting PDFs: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/v1/pdfs/{file_type}/{pdf_id}")
+async def delete_pdf(file_type: str, pdf_id: str):
+    """Delete PDF file by type and ID"""
+    logger = logging.getLogger("uvicorn")
+    try:
+        if file_type not in ["slide", "textbook"]:
+            raise HTTPException(status_code=400, detail="Invalid file type. Must be 'slide' or 'textbook'")
+            
+        dir_path = f"./data/user_uploaded_{file_type}_pdf"
+        if not os.path.exists(dir_path):
+            raise HTTPException(status_code=404, detail="Directory not found")
+            
+        for filename in os.listdir(dir_path):
+            if filename.startswith(pdf_id):
+                os.remove(os.path.join(dir_path, filename))
+                return {"message": f"{file_type} file deleted successfully"}
+                
+        raise HTTPException(status_code=404, detail="File not found")
+    except HTTPException as e:
+        logger.error(f"File deletion failed: {str(e)}")
+        raise e
+    except Exception as e:
+        logger.error(f"File deletion failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/pdfs")
+async def get_all_pdfs() -> dict:
+    """Get all PDFs grouped by type"""
+    logger = logging.getLogger("uvicorn")
+    try:
+        slides = await get_pdfs("slide")
+        textbooks = await get_pdfs("textbook")
+        
+        return {
+            "slides": slides,
+            "textbooks": textbooks
+        }
+    except Exception as e:
+        logger.error(f"File retrieval failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     

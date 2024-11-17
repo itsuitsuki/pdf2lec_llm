@@ -18,43 +18,35 @@ import FolderIcon from "@mui/icons-material/Folder";
 import DeleteIcon from "@mui/icons-material/Delete";
 
 import "../styles/Home.css";
-import axios from "axios";
-// import { PDFViewer } from "@react-pdf/renderer";
+import { pdfAPI } from '../api/pdf';
 import PDFViewer from "../components/pdfViewer";
 import { useNavigate } from "react-router-dom";
-
-
-interface PDF {
-  pdf: string;
-  title: string;
-}
+import { PDFFile } from '../api/types';
 
 const Home = () => {
   const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState("");
   const [file, setFile] = useState<File | null>(null);
-  const [allPDFS, setAllPDFS] = useState<PDF[]>([]);
-  const [selectedPDF, setSelectedPDF] = useState<string | null>(null); // State to manage selected PDF
+  const [slides, setSlides] = useState<PDFFile[]>([]);
+  const [selectedPDF, setSelectedPDF] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    getPDF();
+    console.log('Home component mounted');
+    loadSlides();
   }, []);
 
-  // let audio = new Audio("../../public/L6_Classification_slide1.mp3");
-
-  // const playAudio = () => {
-  //   audio.play();
-  // };
-
-  // const pause = () => {
-  //   audio.pause();
-  // };
-
-  const getPDF = async () => {
-    const result = await axios.get("http://localhost:8080/get-files");
-    console.log(result.data.data);
-    setAllPDFS(result.data.data);
+  const loadSlides = async () => {
+    console.log('=== Starting to load slides ===');
+    try {
+      const response = await pdfAPI.getPDFs('slide');
+      console.log('🟢 Slides loaded successfully:', response.data);
+      if (response.data) {
+        setSlides(response.data);
+        console.log('🟢 Slides state updated:', response.data);
+      }
+    } catch (error) {
+      console.error('🔴 Failed to fetch slides:', error);
+    }
   };
 
   const handleClickOpen = () => {
@@ -64,51 +56,60 @@ const Home = () => {
   const handleClose = () => {
     setOpen(false);
     setFile(null);
-    setTitle("");
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0]; // Check if files exist and select the first one
+    const selectedFile = e.target.files?.[0];
     if (selectedFile) {
       setFile(selectedFile);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault(); // Prevent default form submission
+    e.preventDefault();
+    console.log('=== Starting file upload ===');
+    
     if (!file) {
-      alert("Please upload a PDF file.");
+      console.warn('⚠️ No file selected');
+      alert("Please select a PDF file.");
       return;
     }
-    const formData = new FormData();
-    formData.append("title", title);
-    formData.append("file", file);
-    console.log("Title:", title);
-    console.log("File:", file);
-    const result = await axios.post(
-      "http://localhost:8080/upload-files",
-      formData,
-      {
-        headers: { "Content-Type": "multipart/form-data" },
-      }
-    );
-    getPDF();
-    alert(`Uploaded ${title} successfully!`);
-    console.log(result);
 
-    handleClose();
+    try {
+      console.log('📁 Selected file:', file.name);
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await pdfAPI.uploadSlide(formData);
+      console.log('🟢 Upload successful:', response);
+      
+      await loadSlides();
+      handleClose();
+      alert('Slide uploaded successfully!');
+    } catch (error: any) {
+      console.error('🔴 Upload failed:', error);
+      console.error('Error details:', {
+        message: error?.message,
+        response: error?.response,
+        status: error?.response?.status,
+      });
+      alert(`Upload failed: ${error?.response?.data?.detail || error.message || 'Unknown error'}`);
+    }
   };
 
-  const showPDF = (pdf: string) => {
-    const url = `http://localhost:8080/files/${pdf}`;
-    console.log(`http://localhost:8080/files/${pdf}`);
-    setSelectedPDF(`http://localhost:8080/files/${pdf}`); // Update state to the selected PDF
-    navigate(`/pdf/${pdf}`);
+  const handleDelete = async (pdfId: string) => {
+    try {
+      await pdfAPI.deletePDF('slide', pdfId);
+      loadSlides(); // Refresh the list after deletion
+    } catch (error) {
+      console.error('Delete failed:', error);
+      alert('Failed to delete the slide');
+    }
   };
 
-  // Remove the PDF from the state
-  const handleDelete = (pdfPath: string) => {
-    setAllPDFS((prevPDFS) => prevPDFS.filter((data) => data.pdf !== pdfPath));
+  const showPDF = (pdf: PDFFile) => {
+    setSelectedPDF(pdf.path);
+    navigate(`/pdf/${pdf.id}`);
   };
 
   return (
@@ -160,16 +161,9 @@ const Home = () => {
 
           {/* Dialog Modal with Form */}
           <Dialog open={open} onClose={handleClose}>
-            <DialogTitle>Upload PDF</DialogTitle>
+            <DialogTitle>Upload Slide PDF</DialogTitle>
             <DialogContent>
               <form className="form-container" onSubmit={handleSubmit}>
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="Title"
-                  onChange={(e) => setTitle(e.target.value)}
-                  required
-                />
                 <input
                   type="file"
                   className="form-control"
@@ -179,7 +173,7 @@ const Home = () => {
                 />
                 <DialogActions>
                   <Button onClick={handleClose}>Cancel</Button>
-                  <Button type="submit">Submit</Button>
+                  <Button type="submit">Upload</Button>
                 </DialogActions>
               </form>
             </DialogContent>
@@ -195,38 +189,35 @@ const Home = () => {
             <h1>Uploaded PDFs</h1>
             <div className="uploaded-container">
               <List sx={{ width: "40%" }}>
-                {allPDFS &&
-                  allPDFS.map((data) => (
-                    <div className="pdf-container">
-                      <ListItem
-                        key={data.pdf}
-                        sx={{ display: "flex", alignItems: "center" }}
-                      >
+                {slides && slides.length > 0 ? (
+                  slides.map((pdf) => (
+                    <div className="pdf-container" key={pdf.id}>
+                      <ListItem sx={{ display: "flex", alignItems: "center" }}>
                         <ListItemAvatar>
-                          <Avatar
-                            sx={{
-                              backgroundColor: "rgb(95, 95, 226)",
-                              color: "white",
-                            }}
-                          >
+                          <Avatar sx={{ backgroundColor: "rgb(95, 95, 226)", color: "white" }}>
                             <FolderIcon />
                           </Avatar>
                         </ListItemAvatar>
                         <ListItemText
                           sx={{ cursor: "pointer" }}
-                          onClick={() => showPDF(data.pdf)}
-                          primary={
-                            <div>
-                              <h3>{data.title}</h3>
-                            </div>
-                          }
+                          onClick={() => showPDF(pdf)}
+                          primary={<h3>{pdf.filename.split('_').slice(1).join('_')}</h3>}
                         />
-                        <IconButton edge="end" aria-label="delete">
-                          <DeleteIcon onClick={() => handleDelete(data.pdf)} />
+                        <IconButton 
+                          edge="end" 
+                          aria-label="delete"
+                          onClick={() => handleDelete(pdf.id)}
+                        >
+                          <DeleteIcon />
                         </IconButton>
                       </ListItem>
                     </div>
-                  ))}
+                  ))
+                ) : (
+                  <ListItem>
+                    <ListItemText primary="No PDFs uploaded yet" />
+                  </ListItem>
+                )}
               </List>
             </div>
           </Box>
