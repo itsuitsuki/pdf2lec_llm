@@ -3,6 +3,7 @@ export interface PDFFile {
     filename: string;
     path: string;
     type: 'slide' | 'textbook';
+    status?: 'pending' | 'completed' | 'failed';
 }
   
 export interface TaskResponse {
@@ -12,8 +13,17 @@ export interface TaskResponse {
     error?: string;
 }
 
-export interface GenerateLectureOptions {
-    debug_mode?: boolean;
-    use_rag?: boolean;
-    textbook_name?: string;
+export interface GenerateOptions {
+    similarity_threshold: number;
+    text_generating_context_size: number;
+    max_tokens: number;
+    pdf_name: string;
+    page_model: string;
+    digest_model: string;
+    tts_model: string;
+    tts_voice: string;
+    complexity: number;
+    debug_mode: boolean;
+    use_rag: boolean;
+    textbook_name: string | null;
 }

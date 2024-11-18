@@ -1,23 +1,17 @@
-import { useState } from "react";
-import { Routes, Route, BrowserRouter } from "react-router-dom";
-import "./App.css";
-import Sidebar from "./components/Sidebar";
-import Home from "./pages/Home";
-import Starred from "./pages/Starred";
-import Display from "./pages/Display";
-
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import Home from './pages/Home';
+import Display from './pages/Display';
+import ConfigurePage from './pages/ConfigurePage';
 
 function App() {
   return (
-    <>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Home />}></Route>
-          <Route path="/starred" element={<Starred />}></Route>
-          <Route path="/pdf/:pdfId" element={<Display />} />
-        </Routes>
-      </BrowserRouter>
-    </>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/configure/:pdfId" element={<ConfigurePage />} />
+        <Route path="/display/:pdfId" element={<Display />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 

@@ -108,8 +108,11 @@ const Home = () => {
   };
 
   const showPDF = (pdf: PDFFile) => {
-    setSelectedPDF(pdf.path);
-    navigate(`/pdf/${pdf.id}`);
+    if (pdf.status === 'completed') {
+      navigate(`/display/${pdf.id}`);
+    } else if (!pdf.status) {
+      navigate(`/configure/${pdf.id}`);
+    }
   };
 
   return (

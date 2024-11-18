@@ -341,7 +341,7 @@ def split_merge_pdf_sync(task_id: str, args: PDFSplitMergeArgs):
         
         # Generate timestamp for unique directory
         timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-        pdf_path = f"./test/{args.pdf_name}.pdf"
+        pdf_path = f"./data/user_uploaded_slide_pdf/{args.pdf_name}.pdf"
         image_dir = f"./data/{timestamp}/images"
         merged_image_dir = f"./data/{timestamp}/merged_images"
         

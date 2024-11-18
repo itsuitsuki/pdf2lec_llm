@@ -24,9 +24,9 @@ def pdf2lec(_args, task_id):
         TEXT_GENERATING_CONTEXT_SIZE = _args.text_generating_context_size
         MAX_TOKENS = _args.max_tokens
 
-        TEST_PDF_NAME = _args.pdf_name
-        TIMESTAMP = datetime.datetime.now().strftime("%Y%m%d%H%M%S") # e.g., 20210917123456 means 2021-09-17 12:34:56
-        PDF_PATH = f"./test/{TEST_PDF_NAME}.pdf"
+        TEST_PDF_NAME = _args.pdf_name.replace('.', '')
+        TIMESTAMP = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        PDF_PATH = f"./data/user_uploaded_slide_pdf/{TEST_PDF_NAME}.pdf"
 
         PAGE_MODEL = "gpt-4o"
         DIGEST_MODEL = "gpt-4o-mini"
@@ -100,7 +100,8 @@ def pdf2lec(_args, task_id):
             
             
             if _args.textbook_name and _args.use_rag:
-                textbook_path = f"./test/{_args.textbook_name}.pdf"
+                textbook_name = _args.textbook_name.replace('.', '')
+                textbook_path = f"./data/user_uploaded_textbook_pdf/{textbook_name}.pdf"
                 logger.info(f"Task {task_id}: Initializing textbook indexer")
                 logger.debug(f"Task {task_id}: Textbook path: {textbook_path}")
                 faiss_textbook_indexer = FAISSTextbookIndexer(textbook_path)

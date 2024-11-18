@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { PDFFile } from './types';
+import { PDFFile, GenerateOptions } from './types';
 
 const API_BASE_URL = 'http://localhost:5000/api/v1';
 
@@ -50,6 +50,40 @@ export const pdfAPI = {
       if (error.response) {
         throw error.response;
       }
+      throw error;
+    }
+  },
+
+  uploadTextbook: async (formData: FormData) => {
+    try {
+      const response = await axiosInstance.post('/upload-textbook', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return response;
+    } catch (error) {
+      console.error('Failed to upload textbook:', error);
+      throw error;
+    }
+  },
+
+  generateLecture: async (options: GenerateOptions) => {
+    try {
+      const response = await axiosInstance.post('/lec_generate', options);
+      return response;
+    } catch (error) {
+      console.error('Failed to generate lecture:', error);
+      throw error;
+    }
+  },
+
+  getTaskStatus: async (taskId: string) => {
+    try {
+      const response = await axiosInstance.get(`/task_status/${taskId}`);
+      return response;
+    } catch (error) {
+      console.error('Failed to get task status:', error);
       throw error;
     }
   },
