@@ -58,14 +58,25 @@ def configure_logging(debug_mode: bool):
 # Synchronous function to generate content
 def generate_content_sync(task_id: str, lec_args: LecGenerateArgs):
     try:
-        # whether to enable debug logging
-        # configure_logging(lec_args.debug_mode)
-        # logger = CustomLogger.get_logger(__name__)
         logger = logging.getLogger("uvicorn")
         logger.info(f"Starting new task with ID: {task_id}")
         
+        # 如果使用教科书，确保从metadata中获取正确的文件名
+        if lec_args.use_rag and lec_args.textbook_name:
+            base_dir = f"./data/{lec_args.pdf_name}"
+            with open(f"{base_dir}/metadata.json", "r") as f:
+                metadata = json.load(f)
+            if not metadata.get("has_textbook"):
+                raise HTTPException(
+                    status_code=400,
+                    detail="No textbook found for this slide"
+                )
+            # 使用metadata中存储的教科书文件名
+            lec_args.textbook_name = metadata.get("textbook_filename")
+        
         # main logic to generate content
         metadata = pdf2lec(lec_args, task_id)
+        
         # update the task status database
         redis_client.set(task_id, json.dumps({"status": "completed", "metadata": metadata}))
     except Exception as e:
@@ -341,7 +352,7 @@ def split_merge_pdf_sync(task_id: str, args: PDFSplitMergeArgs):
         
         # Generate timestamp for unique directory
         timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-        pdf_path = f"./data/user_uploaded_slide_pdf/{args.pdf_name}.pdf"
+        pdf_path = f"./test/{args.pdf_name}.pdf"
         image_dir = f"./data/{timestamp}/images"
         merged_image_dir = f"./data/{timestamp}/merged_images"
         
@@ -431,27 +442,46 @@ class FileValidator:
         
         return True
 
+def generate_unique_id():
+    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    random_suffix = uuid.uuid4().hex[:6]  # 添加6位随机字符
+    return f"{timestamp}_{random_suffix}"
+
 @app.post("/api/v1/upload-slide")
 async def upload_slide(file: UploadFile = File(...)):
     """Upload slide PDF file"""
     logger = logging.getLogger("uvicorn")
     try:
         FileValidator.validate(file, "slide")
-        os.makedirs("./data/user_uploaded_slide_pdf", exist_ok=True)
-        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        unique_id = generate_unique_id()
         sanitized_filename = FileValidator.sanitize_filename(file.filename)
-        filename = f"{timestamp}_{sanitized_filename}"
-        file_path = os.path.join("./data/user_uploaded_slide_pdf", filename)
         
-        with open(file_path, "wb") as buffer:
+        # 创建新的目录结构
+        base_dir = f"./data/{unique_id}"
+        os.makedirs(base_dir, exist_ok=True)
+        
+        # 保存PDF文件
+        pdf_path = os.path.join(base_dir, f"Input_{sanitized_filename}")
+        with open(pdf_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
+        
+        # 创建metadata.json
+        metadata = {
+            "id": unique_id,
+            "original_filename": sanitized_filename,
+            "type": "slide",
+            "timestamp": datetime.datetime.now().isoformat(),
+            "status": "pending"
+        }
+        
+        with open(os.path.join(base_dir, "metadata.json"), "w") as f:
+            json.dump(metadata, f, indent=2)
             
-        # Return a JSONResponse with proper headers
         return JSONResponse(
             content={
-                "id": timestamp,
-                "filename": sanitized_filename,  # Return original filename for display
-                "path": file_path,
+                "id": unique_id,
+                "filename": sanitized_filename,
+                "path": f"/data/{unique_id}/Input_{sanitized_filename}",
                 "type": "slide",
                 "message": "File uploaded successfully"
             },
@@ -470,27 +500,50 @@ async def upload_slide(file: UploadFile = File(...)):
             status_code=500
         )
 
-@app.post("/api/v1/upload-textbook")
-async def upload_textbook(file: UploadFile = File(...)):
+@app.post("/api/v1/upload-textbook/{slide_id}")
+async def upload_textbook(slide_id: str, file: UploadFile = File(...)):
     """Upload textbook PDF file"""
     logger = logging.getLogger("uvicorn")
     try:
         FileValidator.validate(file, "textbook")
-        os.makedirs("./data/user_uploaded_textbook_pdf", exist_ok=True)
-        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         sanitized_filename = FileValidator.sanitize_filename(file.filename)
-        filename = f"{timestamp}_{sanitized_filename}"
-        file_path = os.path.join("./data/user_uploaded_textbook_pdf", filename)
         
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        # 使用传入的 slide_id 作为目录
+        base_dir = f"./data/{slide_id}"
+        if not os.path.exists(base_dir):
+            raise HTTPException(status_code=404, detail="Slide ID not found")
             
-        return {
-            "id": timestamp,
-            "filename": filename,
-            "path": file_path,
-            "type": "textbook"
-        }
+        # 读取现有的 metadata
+        with open(os.path.join(base_dir, "metadata.json"), "r") as f:
+            metadata = json.load(f)
+            
+        # 保存教科书文件
+        pdf_path = os.path.join(base_dir, f"Input_{sanitized_filename}")
+        with open(pdf_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # 更新 metadata
+        metadata.update({
+            "textbook_filename": sanitized_filename,
+            "textbook_path": f"/data/{slide_id}/Input_{sanitized_filename}",
+            "has_textbook": True,
+            "updated_at": datetime.datetime.now().isoformat()
+        })
+        
+        # 保存更新后的 metadata
+        with open(os.path.join(base_dir, "metadata.json"), "w") as f:
+            json.dump(metadata, f, indent=2)
+            
+        return JSONResponse(
+            content={
+                "id": slide_id,
+                "filename": sanitized_filename,
+                "path": f"/data/{slide_id}/Input_{sanitized_filename}",
+                "type": "textbook",
+                "metadata": metadata
+            },
+            status_code=200
+        )
     except HTTPException as e:
         logger.error(f"File validation failed: {str(e)}")
         raise e
@@ -506,34 +559,33 @@ async def get_pdfs(file_type: str) -> List[dict]:
         if file_type not in ["slide", "textbook"]:
             raise HTTPException(status_code=400, detail="Invalid file type")
             
-        dir_path = f"./data/user_uploaded_{file_type}_pdf"
-        logger.debug(f"Searching for PDFs in directory: {dir_path}")
-        
-        if not os.path.exists(dir_path):
-            logger.debug(f"Directory {dir_path} does not exist")
-            return []
-            
+        base_dir = "./data"
         files = []
-        for filename in os.listdir(dir_path):
-            if filename.endswith(".pdf"):
-                timestamp = filename.split("_")[0]
-                file_path = os.path.join(dir_path, filename)
-                relative_path = os.path.relpath(file_path, ".")
-                files.append({
-                    "id": timestamp,
-                    "filename": filename,
-                    "path": f"/data/{relative_path}",  # 修改为正确的静态文件路径
-                    "type": file_type
-                })
-                logger.debug(f"Found PDF file: {filename}, path: {relative_path}")
         
-        return JSONResponse(
-            content=files,
-            headers={
-                "Access-Control-Allow-Origin": "http://127.0.0.1:5173",
-                "Access-Control-Allow-Credentials": "true",
-            }
-        )
+        # 遍历所有任务目录
+        for dir_name in os.listdir(base_dir):
+            dir_path = os.path.join(base_dir, dir_name)
+            if not os.path.isdir(dir_path):
+                continue
+                
+            metadata_path = os.path.join(dir_path, "metadata.json")
+            if not os.path.exists(metadata_path):
+                continue
+                
+            with open(metadata_path, 'r') as f:
+                metadata = json.load(f)
+                
+            if metadata.get('type') == file_type:
+                files.append({
+                    "id": metadata['id'],
+                    "filename": f"Input_{metadata['original_filename']}",
+                    "path": f"/data/{dir_name}/Input_{metadata['original_filename']}",
+                    "type": file_type,
+                    "metadata": metadata
+                })
+        
+        logger.debug(f"Returning {len(files)} PDF files")
+        return files
     except Exception as e:
         logger.error(f"Error getting PDFs: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -544,21 +596,14 @@ async def delete_pdf(file_type: str, pdf_id: str):
     logger = logging.getLogger("uvicorn")
     try:
         if file_type not in ["slide", "textbook"]:
-            raise HTTPException(status_code=400, detail="Invalid file type. Must be 'slide' or 'textbook'")
+            raise HTTPException(status_code=400, detail="Invalid file type")
             
-        dir_path = f"./data/user_uploaded_{file_type}_pdf"
-        if not os.path.exists(dir_path):
-            raise HTTPException(status_code=404, detail="Directory not found")
-            
-        for filename in os.listdir(dir_path):
-            if filename.startswith(pdf_id):
-                os.remove(os.path.join(dir_path, filename))
-                return {"message": f"{file_type} file deleted successfully"}
+        base_dir = f"./data/{pdf_id}"
+        if os.path.exists(base_dir):
+            shutil.rmtree(base_dir)
+            return {"message": f"{file_type} file and associated data deleted successfully"}
                 
         raise HTTPException(status_code=404, detail="File not found")
-    except HTTPException as e:
-        logger.error(f"File deletion failed: {str(e)}")
-        raise e
     except Exception as e:
         logger.error(f"File deletion failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

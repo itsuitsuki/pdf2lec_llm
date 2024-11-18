@@ -69,16 +69,16 @@ def convert_pdf_to_images(pdf_path, output_dir):
 
     # Open the PDF
     doc = pymupdf.open(pdf_path)
-
-    # Iterate through each page
-    for page_num, page in enumerate(doc):
-        # Convert the page to an image
-        pix = page.get_pixmap(matrix=pymupdf.Matrix(300/72, 300/72))  # 300 DPI
-        
-        # Save the image
-        image_filename = f"page_{page_num+1}.png"
+    total_pages = len(doc)
+    logger.info(f"Converting PDF to images: {total_pages} pages total")
+    
+    for page_num, page in enumerate(doc, 1):
+        pix = page.get_pixmap(matrix=pymupdf.Matrix(300/72, 300/72))
+        image_filename = f"page_{page_num}.png"
         pix.save(image_dir / image_filename)
-    # print(f"PDF pages converted to images and saved to {output_dir}")
+        logger.info(f"Converted page {page_num}/{total_pages} to image")
+    
+    logger.info(f"PDF conversion completed: all {total_pages} pages converted to images")
 
 def merge_similar_images(image_dir, output_dir, similarity_threshold=0.4, max_merge=4):
     """
@@ -93,6 +93,8 @@ def merge_similar_images(image_dir, output_dir, similarity_threshold=0.4, max_me
     
     # Get all image files sorted by name
     image_files = sorted([f for f in os.listdir(image_dir) if f.endswith('.png')])
+    total_images = len(image_files)
+    logger.info(f"Starting image merging process: {total_images} images to process")
     
     merged_groups = []
     current_group = [image_files[0]]
@@ -119,7 +121,10 @@ def merge_similar_images(image_dir, output_dir, similarity_threshold=0.4, max_me
         merged_groups.append(current_group)
     
     # Merge and save images
-    for i, group in enumerate(merged_groups):
+    total_groups = len(merged_groups)
+    logger.info(f"Merging {total_groups} groups of similar images")
+    
+    for i, group in enumerate(merged_groups, 1):
         if len(group) == 1:
             merged = cv2.imread(os.path.join(image_dir, group[0]))
         else:
@@ -154,10 +159,10 @@ def merge_similar_images(image_dir, output_dir, similarity_threshold=0.4, max_me
         # Use the first image's number in the group for naming
         first_num = int(group[0].split('_')[1].split('.')[0])
         cv2.imwrite(os.path.join(output_dir, f'merged_{first_num:03d}.png'), merged)
-        # :03d means 3 digits with leading zeros, equivalent to zfill(3)
+        logger.info(f"Merged group {i}/{total_groups} ({len(group)} images)")
     
-    # print(f"Merged images saved to {output_dir}")
-    
+    logger.info(f"Image merging completed: {total_groups} merged images saved")
+
 def generate_lecture_from_images_openai(client, image_dir, prompt, faiss_textbook_indexer=None, context_size=2, model_name="gpt-4o", max_tokens=500):
     """
     Generate a complete lecture by analyzing images in sequence, maintaining context.
@@ -172,7 +177,9 @@ def generate_lecture_from_images_openai(client, image_dir, prompt, faiss_textboo
     :return: A list of content for each slide, and the list of image files corresponding to each slide
     """
     image_files = sorted([f for f in os.listdir(image_dir) if f.endswith('.png')])
-    # full_lecture = ""
+    total_slides = len(image_files)
+    logger.info(f"Starting lecture generation: {total_slides} slides to process")
+    
     context = []
     contents = []
     pbar = tqdm(total=len(image_files))
@@ -211,18 +218,19 @@ def generate_lecture_from_images_openai(client, image_dir, prompt, faiss_textboo
             max_tokens=max_tokens
         )
         
-        # Update context
         context.append(slide_content)
         contents.append(slide_content)
         if len(context) > context_size:
             context.pop(0)
-        pbar.update(1)
-        pbar.set_postfix_str(f"Slide {i+1} analyzed")
         
-    pbar.close()
+        logger.info(f"Completed slide {i}/{total_slides}")
+    
+    logger.info(f"Lecture generation completed: all {total_slides} slides processed")
     return contents, image_files
 
 def digest_lecture_openai(client, complete_lecture, digest_prompt, model_name="gpt-4o-mini"):
+    """Generate lecture summary"""
+    logger.info("Starting lecture summary generation")
     summary = client.chat.completions.create(
         model=model_name,
         messages=[
@@ -233,5 +241,5 @@ def digest_lecture_openai(client, complete_lecture, digest_prompt, model_name="g
             }
         ]
     )
-
+    logger.info("Lecture summary generation completed")
     return summary.choices[0].message.content

@@ -10,6 +10,9 @@ import shutil
 import logging
 from src.faiss_textbook_indexer import FAISSTextbookIndexer
 import traceback
+import os
+from concurrent.futures import ThreadPoolExecutor
+import threading
 # from src.logger import CustomLogger
 
 
@@ -54,10 +57,8 @@ def pdf2lec(_args, task_id):
             "textbook_name": _args.textbook_name,
             "audio_timestamps": []
         }
-        # save the metadata to metadata/{TIMESTAMP}.json
-        metadata_dir = f"./metadata"
-        Path(metadata_dir).mkdir(parents=True, exist_ok=True)
-        metadata_file = f"{metadata_dir}/{TIMESTAMP}.json"
+
+
         # save the metadata to a json file (save later)
         # with open(metadata_file, 'w', encoding='utf-8') as f:
         #     json.dump(METADATA, f, ensure_ascii=False, indent=4)
@@ -70,10 +71,37 @@ def pdf2lec(_args, task_id):
         # audio_dir = f"./data/generated_audios/{TEST_PDF_NAME}"
         # image_dir = f"./data/images/{TEST_PDF_NAME}"
         # merged_image_dir = f"./data/merged_images/{TEST_PDF_NAME}"
-        generated_lecture_dir = f"./data/{TIMESTAMP}/generated_texts"
-        audio_dir = f"./data/{TIMESTAMP}/generated_audios"
-        image_dir = f"./data/{TIMESTAMP}/images"
-        merged_image_dir = f"./data/{TIMESTAMP}/merged_images"
+        pdf_id = _args.pdf_name
+        base_dir = f"./data/{pdf_id}"
+        
+        # 从 metadata.json 获取原始文件名和教科书信息
+        with open(f"{base_dir}/metadata.json", "r") as f:
+            metadata = json.load(f)
+        
+        original_filename = metadata.get('original_filename')
+        PDF_PATH = f"{base_dir}/Input_{original_filename}"
+        
+        # 更新目录路径
+        generated_lecture_dir = f"{base_dir}/generated_texts"
+        audio_dir = f"{base_dir}/generated_audios"
+        image_dir = f"{base_dir}/images"
+        merged_image_dir = f"{base_dir}/merged_images"
+        metadata_file = f"{base_dir}/metadata.json"
+        
+        # 读取原始metadata
+        with open(metadata_file, "r") as f:
+            metadata = json.load(f)
+        
+        # 更新METADATA
+        METADATA.update(metadata)
+        METADATA.update({
+            "timestamp": TIMESTAMP,
+            "similarity_threshold": SIMILARITY_THRESHOLD_TO_MERGE,
+        })
+        
+        # 保存更新后的metadata
+        with open(f"{base_dir}/metadata.json", "w") as f:
+            json.dump(METADATA, f, ensure_ascii=False, indent=4)
 
         is_text_generated = Path(generated_lecture_dir).exists() and Path(
             f"{generated_lecture_dir}/lecture/summary.txt").exists()
@@ -100,13 +128,18 @@ def pdf2lec(_args, task_id):
             
             
             if _args.textbook_name and _args.use_rag:
-                textbook_name = _args.textbook_name.replace('.', '')
-                textbook_path = f"./data/user_uploaded_textbook_pdf/{textbook_name}.pdf"
+                # 使用同一目录下的教科书文件
+                textbook_path = f"{base_dir}/Input_{_args.textbook_name}"
                 logger.info(f"Task {task_id}: Initializing textbook indexer")
                 logger.debug(f"Task {task_id}: Textbook path: {textbook_path}")
+                
+                if not os.path.exists(textbook_path):
+                    raise FileNotFoundError(f"Textbook file not found at {textbook_path}")
+                    
                 faiss_textbook_indexer = FAISSTextbookIndexer(textbook_path)
                 # Create index if it doesn't exist
-                if not (Path(faiss_textbook_indexer.index_path) / Path(textbook_path).stem).exists():
+                index_path = Path(faiss_textbook_indexer.index_path) / Path(textbook_path).stem
+                if not index_path.exists():
                     logger.info(f"Task {task_id}: Creating textbook index")
                     faiss_textbook_indexer.create_index()
 
@@ -202,8 +235,7 @@ def pdf2lec(_args, task_id):
         is_audio_generated = Path(audio_dir).exists() and Path(
             f"{audio_dir}/summary.mp3").exists()
         if is_audio_generated and not DO_REGENERATE:
-            # print("The audio files have already been generated.")
-            logger.info(f"Task {task_id}: The audio files have already been generated.")
+            logger.info(f"Task {task_id}: Loading existing audio files")
             audio_files = list(Path(audio_dir).iterdir())
             # delete ends with summary.mp3
             audio_files = [file for file in audio_files if not str(
@@ -222,30 +254,77 @@ def pdf2lec(_args, task_id):
             # add the summary audio file at the end
             audio_files.append(str(Path(f"{audio_dir}/summary.mp3")))
         else:
-            # delete the existing audio files
-            audio_files = generate_audio_files_openai(
-                client, content_list, audio_dir, model_name=TTS_MODEL, voice=TTS_VOICE)
+            logger.info(f"Task {task_id}: Starting parallel audio generation")
+            Path(audio_dir).mkdir(parents=True, exist_ok=True)
+            
+            # 创建线程安全的列表来存储生成的音频文件路径
+            audio_files_lock = threading.Lock()
+            audio_files = []
+            
+            def generate_single_audio(args):
+                index, content = args
+                try:
+                    file_path = str(Path(audio_dir) / f"page_{index:03d}.mp3")
+                    if index == 0:
+                        file_path = str(Path(audio_dir) / "introduction.mp3")
+                    elif index == len(content_list) - 1:
+                        file_path = str(Path(audio_dir) / "summary.mp3")
+                    
+                    # 生成单个音频文件
+                    response = client.audio.speech.create(
+                        model=TTS_MODEL,
+                        voice=TTS_VOICE,
+                        input=content
+                    )
+                    
+                    # 保存音频文件
+                    with open(file_path, 'wb') as f:
+                        for chunk in response.iter_bytes(chunk_size=1024 * 1024):
+                            f.write(chunk)
+                    
+                    # 线程安全地添加文件路径
+                    with audio_files_lock:
+                        audio_files.append(file_path)
+                        logger.info(f"Task {task_id}: Generated audio {len(audio_files)}/{len(content_list)}")
+                    
+                    return file_path
+                except Exception as e:
+                    logger.error(f"Task {task_id}: Failed to generate audio for page {index}: {str(e)}")
+                    raise e
+            
+            # 使用线程池并发生成音频
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                # 创建任务列表，包含索引和内容
+                tasks = list(enumerate(content_list))
+                
+                # 提交所有任务并等待完成
+                list(executor.map(generate_single_audio, tasks))
+            
+            # 按正确顺序排序音频文件
+            audio_files.sort(key=lambda x: int(Path(x).stem.split("_")[1]) if "_" in Path(x).stem else -1 if "introduction" in x else 999)
+            
+            logger.info(f"Task {task_id}: All audio files generated successfully")
 
         # Merge all the audio files into one
         # print("===== Merging Audio Files =====")
         logger.info(f"Task {task_id}: Merging Audio Files")
         combined = AudioSegment.empty()
-        current_position = 0  
-        audio_timestamps = [0]  
+        current_position = 0
+        audio_timestamps = [0]
 
         for file in audio_files:
             audio_segment = AudioSegment.from_mp3(file)
             combined += audio_segment
-            current_position += len(audio_segment)  # len() returns the number of milliseconds
+            current_position += len(audio_segment)
             audio_timestamps.append(current_position)
-
+        
         audio_timestamps.pop()
         logger.debug(f"Task {task_id}: Audio timestamps: {audio_timestamps}")
-        METADATA["audio_timestamps"] = audio_timestamps
-
         final_output_path = f"{audio_dir}/combined.mp3"
         combined.export(final_output_path, format="mp3", bitrate="192k")
-
+        
+        METADATA["status"] = "completed"
+        METADATA["audio_timestamps"] = audio_timestamps
         with open(metadata_file, 'w', encoding='utf-8') as f:
             json.dump(METADATA, f, ensure_ascii=False, indent=4)
         logger.info(f"Task {task_id}: All audio files have been merged into one file: {final_output_path}")
@@ -259,18 +338,17 @@ def pdf2lec(_args, task_id):
         if is_successful:
             logger.info(f"Task {task_id} finished.")
         else:
-            cleanup_paths = [generated_lecture_dir, audio_dir, image_dir, merged_image_dir]
+            # 只需要删除生成的子目录，保留原始文件和 metadata
+            cleanup_paths = [
+                f"{base_dir}/generated_texts",
+                f"{base_dir}/generated_audios",
+                f"{base_dir}/images",
+                f"{base_dir}/merged_images"
+            ]
             for cleanup_path in cleanup_paths:
                 if Path(cleanup_path).exists():
                     shutil.rmtree(cleanup_path)
-            # also delete the metadata file
-            if Path(metadata_file).exists():
-                Path(metadata_file).unlink()
-            # also delete the timestamp folder
-            if Path(f"./data/{TIMESTAMP}").exists():
-                shutil.rmtree(f"./data/{TIMESTAMP}")
-            # print("All generated files have been removed due to failure or interruption.")
-            logger.error(f"Task {task_id}: All generated files have been removed due to failure or interruption.")
+            logger.error(f"Task {task_id}: Generated files have been removed due to failure or interruption.")
             
 
 # if __name__ == "__main__":
