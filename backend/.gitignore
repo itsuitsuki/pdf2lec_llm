@@ -2,8 +2,12 @@
 redis/
 redis/*
 .vscode/
-metadata/
-data/
+metadata/*
+!metadata/.gitkeep
+data/*
+!data/.gitkeep
+
+
 
 *.pem
 
