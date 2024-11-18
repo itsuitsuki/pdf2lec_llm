@@ -4,26 +4,32 @@ import { Box, Button, TextField, FormControlLabel, Switch, Typography } from '@m
 import { pdfAPI } from '../api/pdf';
 
 const ConfigurePage = () => {
-  const { pdfId } = useParams();
+  const { pdfId } = useParams<{ pdfId: string }>();
   const navigate = useNavigate();
   const [textbookFile, setTextbookFile] = useState<File | null>(null);
   const [complexity, setComplexity] = useState<number>(2);
   const [useRAG, setUseRAG] = useState<boolean>(false);
+  const [isUploading, setIsUploading] = useState<boolean>(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    if (!pdfId) {
+      alert('Invalid PDF ID');
+      return;
+    }
+
+    setIsUploading(true);
     try {
-      // First upload textbook if provided
+      // 上传教科书（如果有）
       let textbookName = null;
       if (textbookFile && useRAG) {
         const formData = new FormData();
         formData.append("file", textbookFile);
-        const response = await pdfAPI.uploadTextbook(formData);
-        textbookName = response.data.filename;
+        const response = await pdfAPI.uploadTextbook(formData, pdfId);
+        textbookName = response.data.metadata.textbook_filename;
       }
 
-      // Then start generation
+      // 开始生成
       const response = await pdfAPI.generateLecture({
         similarity_threshold: 0.4,
         text_generating_context_size: 2,
@@ -39,13 +45,25 @@ const ConfigurePage = () => {
         textbook_name: textbookName,
       });
 
-      // Navigate back to home page after starting generation
+      // 生成开始后返回主页
       navigate('/');
     } catch (error) {
       console.error('Generation failed:', error);
-      alert('Failed to start generation');
+      alert('Failed to start generation. Please try again.');
+    } finally {
+      setIsUploading(false);
     }
   };
+
+  if (!pdfId) {
+    return (
+      <Box sx={{ padding: 4, textAlign: 'center' }}>
+        <Typography variant="h5" color="error">
+          Invalid PDF ID. Please select a PDF from the home page.
+        </Typography>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ padding: 4, maxWidth: 600, margin: '0 auto' }}>
@@ -74,6 +92,7 @@ const ConfigurePage = () => {
                 type="file"
                 accept=".pdf"
                 onChange={(e) => setTextbookFile(e.target.files?.[0] || null)}
+                disabled={isUploading}
               />
             </Box>
           )}
@@ -85,14 +104,16 @@ const ConfigurePage = () => {
             onChange={(e) => setComplexity(Number(e.target.value))}
             inputProps={{ min: 1, max: 3 }}
             helperText="1: Brief, 2: Default, 3: Detailed"
+            disabled={isUploading}
           />
 
           <Button 
             variant="contained" 
             type="submit"
+            disabled={isUploading}
             sx={{ mt: 2 }}
           >
-            Start Generation
+            {isUploading ? 'Processing...' : 'Start Generation'}
           </Button>
         </Box>
       </form>

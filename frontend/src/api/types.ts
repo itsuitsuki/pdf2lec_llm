@@ -3,7 +3,8 @@ export interface PDFFile {
     filename: string;
     path: string;
     type: 'slide' | 'textbook';
-    status?: 'pending' | 'completed' | 'failed';
+    metadata: Metadata;
+    displayName: string;
 }
   
 export interface TaskResponse {
@@ -26,4 +27,11 @@ export interface GenerateOptions {
     debug_mode: boolean;
     use_rag: boolean;
     textbook_name: string | null;
+}
+
+export interface Metadata {
+    timestamp: string;
+    audio_timestamps: number[];
+    status: 'pending' | 'completed' | 'failed';
+    original_filename: string;
 }

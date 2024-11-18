@@ -9,9 +9,11 @@ import {
   faChevronUp,
 } from "@fortawesome/free-solid-svg-icons";
 import Transcript from "./Transcript";
+
 interface CarouselProps {
-  pdfUrl: string;
-  audioUrl: string;
+  pdfId: string;
+  audioTimestamps: number[];
+  timestamp: string;
 }
 
 interface SlideViewerProps {
@@ -40,41 +42,45 @@ const SlideViewer: React.FC<SlideViewerProps> = ({ slides, currentSlide }) => {
   );
 };
 
-const Carousel: React.FC<CarouselProps> = ({ pdfUrl, audioUrl }) => {
+const Carousel: React.FC<CarouselProps> = ({ pdfId, audioTimestamps, timestamp }) => {
   const [slides, setSlides] = useState<string[]>([]);
   const [currentSlide, setCurrentSlide] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // An array that stores the time in seconds for each slide.
-  const slideTimes: number[] = [];
-  for (let i = 0; i < slides.length; i++) {
-    slideTimes.push(i * 2); // Increment by 5 for each slide
-  }
+  // 修改 URL 构建方式
+  const pdfUrl = `http://localhost:5000/data/${pdfId}/Input_${timestamp}`;
+  const audioUrl = `http://localhost:5000/data/${pdfId}/generated_audios/combined.mp3`;
+
   useEffect(() => {
     const loadPdf = async () => {
-      const loadingTask = pdfjs.getDocument(pdfUrl);
-      const pdf = await loadingTask.promise;
-      const slideImages: string[] = [];
+      try {
+        console.log('Loading PDF from URL:', pdfUrl);
+        const loadingTask = pdfjs.getDocument(pdfUrl);
+        const pdf = await loadingTask.promise;
+        console.log('PDF loaded successfully, pages:', pdf.numPages);
+        const slideImages: string[] = [];
 
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const viewport = page.getViewport({ scale: 1 });
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const viewport = page.getViewport({ scale: 1 });
+          const canvas = document.createElement("canvas");
+          const context = canvas.getContext("2d");
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
 
-        const scale = 1;
-        const scaledViewport = page.getViewport({ scale });
+          await page.render({ canvasContext: context!, viewport }).promise;
+          slideImages.push(canvas.toDataURL());
+        }
 
-        const canvas = document.createElement("canvas");
-        const context = canvas.getContext("2d");
-        canvas.width = scaledViewport.width;
-        canvas.height = scaledViewport.height;
-
-        await page.render({ canvasContext: context!, viewport: scaledViewport })
-          .promise;
-        slideImages.push(canvas.toDataURL());
+        setSlides(slideImages);
+      } catch (error) {
+        console.error('Error loading PDF:', error);
+        console.error('PDF URL was:', pdfUrl);
+      } finally {
+        setLoading(false);
       }
-
-      setSlides(slideImages);
     };
 
     loadPdf();
@@ -85,49 +91,33 @@ const Carousel: React.FC<CarouselProps> = ({ pdfUrl, audioUrl }) => {
     if (!audioElement || slides.length === 0) return;
 
     const handleTimeUpdate = () => {
-      const currentTime = audioElement.currentTime;
+      const currentTime = audioElement.currentTime * 1000; // 转换为毫秒
+      
+      // 根据时间戳确定当前应该显示的幻灯片
+      const newSlideIndex = audioTimestamps.findIndex((timestamp, index) => {
+        const nextTimestamp = audioTimestamps[index + 1];
+        return currentTime >= timestamp && (!nextTimestamp || currentTime < nextTimestamp);
+      });
 
-      // Determine the correct slide based on the current time in the audio
-      let newSlide = currentSlide;
-      for (let i = 0; i < slideTimes.length; i++) {
-        if (
-          currentTime >= slideTimes[i] &&
-          (i === slideTimes.length - 1 || currentTime < slideTimes[i + 1])
-        ) {
-          newSlide = i;
-          break;
-        }
-      }
-
-      // Only update `currentSlide` if it’s different to avoid unnecessary re-renders
-      if (newSlide !== currentSlide) {
-        setCurrentSlide(newSlide);
+      if (newSlideIndex !== -1 && newSlideIndex !== currentSlide) {
+        setCurrentSlide(newSlideIndex);
       }
     };
 
-    // Attach the time update listener
     audioElement.addEventListener("timeupdate", handleTimeUpdate);
-
-    // Cleanup listener on unmount
     return () => {
       audioElement.removeEventListener("timeupdate", handleTimeUpdate);
     };
-  }, [currentSlide, slides, slideTimes]);
+  }, [currentSlide, slides, audioTimestamps]);
 
-  if (slides.length === 0) {
-    return <div>Loading...</div>;
+  if (loading) {
+    return <div>Loading slides...</div>;
   }
 
   const handleThumbnailClick = (index: number) => {
-    if (currentSlide < index && currentSlide < slides.length - 1) {
-      setCurrentSlide(currentSlide + 1);
-    } else if (currentSlide > index && currentSlide > 0) {
-      setCurrentSlide(currentSlide - 1);
-    } else if (currentSlide === index) {
-      setCurrentSlide(index); // In case the user clicks on the current slide itself
-    }
-    if (audioRef.current) {
-      audioRef.current.currentTime = slideTimes[index];
+    setCurrentSlide(index);
+    if (audioRef.current && audioTimestamps[index]) {
+      audioRef.current.currentTime = audioTimestamps[index] / 1000; // 转换回秒
     }
   };
 

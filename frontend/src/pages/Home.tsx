@@ -108,10 +108,10 @@ const Home = () => {
   };
 
   const showPDF = (pdf: PDFFile) => {
-    if (pdf.status === 'completed') {
-      navigate(`/display/${pdf.id}`);
-    } else if (!pdf.status) {
-      navigate(`/configure/${pdf.id}`);
+    if (pdf.metadata?.status === 'completed') {
+        navigate(`/display/${pdf.id}`);
+    } else if (pdf.metadata?.status === 'pending' || !pdf.metadata?.status) {
+        navigate(`/configure/${pdf.id}`);
     }
   };
 

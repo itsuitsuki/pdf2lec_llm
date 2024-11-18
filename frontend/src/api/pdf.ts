@@ -34,8 +34,12 @@ export const pdfAPI = {
     console.log(`=== API: getPDFs(${type}) called ===`);
     try {
       const response = await axiosInstance.get<PDFFile[]>(`/pdfs/${type}`);
-      console.log('🟢 PDF list received:', response.data);
-      return response;
+      // 处理每个文件的metadata以获取原始文件名
+      const processedFiles = response.data.map(file => ({
+        ...file,
+        displayName: file.metadata?.original_filename || file.filename
+      }));
+      return { data: processedFiles };
     } catch (error: any) {
       console.error('🔴 Failed to get PDFs:', error);
       throw error;
@@ -54,9 +58,9 @@ export const pdfAPI = {
     }
   },
 
-  uploadTextbook: async (formData: FormData) => {
+  uploadTextbook: async (formData: FormData, slideId: string) => {
     try {
-      const response = await axiosInstance.post('/upload-textbook', formData, {
+      const response = await axiosInstance.post(`/upload-textbook/${slideId}`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
