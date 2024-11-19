@@ -26,6 +26,7 @@ from typing import List
 from mimetypes import guess_type
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from openai import OpenAI
 
 # create a Redis client and FastAPI app
 redis_client = None
@@ -623,6 +624,63 @@ async def get_all_pdfs() -> dict:
     except Exception as e:
         logger.error(f"File retrieval failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/chatbot")
+async def chatbot(request: Request):
+    logger = logging.getLogger("uvicorn")
+    try:
+        data = await request.json()
+        message = data.get('message')
+        pdf_id = data.get('pdfId')  # 新增：获取 PDF ID
+        
+        if not message or not isinstance(message, str) or message.strip() == "":
+            return JSONResponse(
+                status_code=400,
+                content={"reply": "Please enter a valid message, so that I can assist you:)"}
+            )
+        
+        # 读取讲座内容作为背景知识
+        lecture_context = ""
+        if pdf_id:
+            try:
+                base_dir = f"./data/{pdf_id}"
+                with open(f"{base_dir}/lecture_content.txt", "r") as f:
+                    lecture_context = f.read()
+            except:
+                logger.warning(f"Could not load lecture content for {pdf_id}")
+
+        # 构建系统提示和上下文
+        system_prompt = """You are a helpful teaching assistant. Use the provided lecture content to help answer student questions.
+        If the question is about the lecture content, base your answer on that. If it's a general question, you can answer based on your knowledge.
+        Keep answers concise and clear."""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+        ]
+        
+        # if lecture_context:
+        #     messages.append({"role": "system", "content": f"Lecture content: {lecture_context}"})
+        
+        messages.append({"role": "user", "content": message})
+
+        client = OpenAI()
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            max_tokens=1000,
+            temperature=0.7
+        )
+        
+        bot_reply = response.choices[0].message.content
+        logger.info(f"Bot reply: {bot_reply}")
+        return {"reply": bot_reply}
+        
+    except Exception as e:
+        logger.error(f"Error in chatbot endpoint: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"reply": "Sorry, something went wrong. Please try again later."}
+        )
 
 if __name__ == "__main__":
     
