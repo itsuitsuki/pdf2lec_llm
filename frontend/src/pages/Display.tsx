@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import Carousel from "../components/Carousel";
 import "../styles/Display.css";
 import { pdfAPI } from "../api/pdf";
+import Chatbot from "../components/Chatbot";
 
 interface Metadata {
   timestamp: string;
@@ -56,13 +57,18 @@ const Display = () => {
 
   return (
     <div className="display-container">
-      {metadata && (
-        <Carousel
-          pdfId={pdfId!}
-          audioTimestamps={metadata.audio_timestamps}
-          timestamp={metadata.original_filename}
-        />
-      )}
+      <div className="main-content">
+        {metadata && (
+          <Carousel
+            pdfId={pdfId!}
+            audioTimestamps={metadata.audio_timestamps}
+            timestamp={metadata.original_filename}
+          />
+        )}
+      </div>
+      <div className="chatbot-section">
+        <Chatbot />
+      </div>
     </div>
   );
 };
