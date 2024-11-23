@@ -265,8 +265,25 @@ async def clear_all_data():
     return {"message": "All data cleared."}
 
 def qa_sync(qa_args: QAArgs, qa_task_id: str):
+    # TODO: qa_args will use use_arg and textbook_name
     logger = logging.getLogger("uvicorn")
     logger.info(f"Task {qa_args.task_id}: Question asked: {qa_args.question}")
+    
+    if qa_args.use_rag and qa_args.textbook_name is None:
+        raise HTTPException(status_code=400, detail="textbook_name must be provided if use_rag is True.")
+    
+    if qa_args.use_rag and qa_args.textbook_name:
+        base_dir = f"./data/{qa_args.pdf_name}"
+        with open(f"{base_dir}/metadata.json", "r") as f:
+            metadata = json.load(f)
+        if not metadata.get("has_textbook"):
+            raise HTTPException(
+                status_code=400,
+                detail="No textbook found for this slide"
+            )
+        qa_args.textbook_name = metadata.get("textbook_filename")
+
+    
 
     task_data = redis_client.get(qa_args.task_id)
     if task_data is None:
@@ -293,6 +310,7 @@ def qa_sync(qa_args: QAArgs, qa_task_id: str):
     else:
         qa_context = None
     logger.info(f"Task {qa_args.task_id}: QA context loaded.")
+    base_dir = f"./data/{qa_args.pdf_name}"
     try:
         answer, qa_context_updated = single_gen_answer(qa_args, pdf_content, transcript, qa_context)
         # qa_context_updated: list of dict of {"role": "user" or "assistant", "content": str of question or answer}
