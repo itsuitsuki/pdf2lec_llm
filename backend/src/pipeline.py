@@ -13,10 +13,11 @@ import traceback
 import os
 from concurrent.futures import ThreadPoolExecutor
 import threading
+from src.arg_models import LecGenerateArgs
 # from src.logger import CustomLogger
 
 
-def pdf2lec(_args, task_id):
+def pdf2lec(_args: LecGenerateArgs, task_id):
     is_successful = False
     logger = logging.getLogger("uvicorn") 
     logger.setLevel(logging.DEBUG if _args.debug_mode else logging.INFO)
@@ -55,6 +56,7 @@ def pdf2lec(_args, task_id):
             "complexity": COMPLEXITY,
             "use_rag": _args.use_rag,
             "textbook_name": _args.textbook_name,
+            "multiagent": _args.multiagent,
             "audio_timestamps": []
         }
 
@@ -154,7 +156,8 @@ def pdf2lec(_args, task_id):
                 faiss_textbook_indexer=faiss_textbook_indexer,  # Pass the indexer
                 context_size=TEXT_GENERATING_CONTEXT_SIZE,
                 model_name=PAGE_MODEL,
-                max_tokens=MAX_TOKENS
+                max_tokens=MAX_TOKENS,
+                multiagent=_args.multiagent,
             )
 
             # Log generated content
