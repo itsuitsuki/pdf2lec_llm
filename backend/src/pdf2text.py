@@ -11,7 +11,7 @@ import os
 from utils.similarity import calculate_similarity
 from src.logger import CustomLogger
 import logging
-
+from prompts.multiagent_prompts import get_clarity_prompt, get_engagement_prompt, get_assembler_prompt
 # logger = CustomLogger.get_logger(__name__)
 logger = logging.getLogger("uvicorn")
 
@@ -79,6 +79,77 @@ def convert_pdf_to_images(pdf_path, output_dir):
         logger.info(f"Converted page {page_num}/{total_pages} to image")
     
     logger.info(f"PDF conversion completed: all {total_pages} pages converted to images")
+
+def multiagent_generation(client, contents, model_name="gpt-4o", loopsize=1, max_tokens=500):
+    """
+    Perform multi-agent generation using clarity, engagement, and assembler agents to refine content.
+
+    :param client: OpenAI API client
+    :param contents: List of content (slides) to process
+    :param clarity_prompt: Base prompt for the clarity agent
+    :param engagement_prompt: Base prompt for the engagement agent
+    :param assembler_prompt: Base prompt for the assembler agent
+    :param model_name: The name of the model to use
+    :param loopsize: Number of refinement loops for each content
+    :param max_tokens: Maximum number of tokens to generate
+    :return: List of refined content for each slide
+    """
+
+    clarity_prompt = get_clarity_prompt()
+    engagement_prompt = get_engagement_prompt()
+    assembler_prompt = get_assembler_prompt()
+
+    refined_contents = []
+    pbar = tqdm(total=len(contents))
+    pbar.set_description("Refining slides")
+
+    for i, content in enumerate(contents):
+        current_content = content
+
+        for _ in range(loopsize):
+            # Clarity Agent
+            clarity_response = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": clarity_prompt},
+                    {"role": "user", "content": f"{clarity_prompt}\n\nContent:\n{current_content}"}
+                ],
+                max_tokens=max_tokens
+            )
+            clarity_critique = clarity_response.choices[0].message.content
+            print(clarity_critique)
+
+            # Engagement Agent
+            engagement_response = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": engagement_prompt},
+                    {"role": "user", "content": f"{engagement_prompt}\n\nContent:\n{current_content}"}
+                ],
+                max_tokens=max_tokens
+            )
+            engagement_critique = engagement_response.choices[0].message.content
+            print(engagement_critique)
+
+            # Assembler Agent
+            assembler_response = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {"role": "system", "content": assembler_prompt},
+                    {
+                        "role": "user",
+                        "content": f"{assembler_prompt}\n\nContent:\n{current_content}\n\nClarity Critique:\n{clarity_critique}\n\nEngagement Critique:\n{engagement_critique}"
+                    }
+                ],
+                max_tokens=max_tokens
+            )
+            current_content = assembler_response.choices[0].message.content
+
+        refined_contents.append(current_content)
+        pbar.update(1)
+
+    pbar.close()
+    return refined_contents
 
 def merge_similar_images(image_dir, output_dir, similarity_threshold=0.4, max_merge=4):
     """
@@ -163,7 +234,7 @@ def merge_similar_images(image_dir, output_dir, similarity_threshold=0.4, max_me
     
     logger.info(f"Image merging completed: {total_groups} merged images saved")
 
-def generate_lecture_from_images_openai(client, image_dir, prompt, faiss_textbook_indexer=None, context_size=2, model_name="gpt-4o", max_tokens=500):
+def generate_lecture_from_images_openai(client, image_dir, prompt, faiss_textbook_indexer=None, context_size=2, model_name="gpt-4o", max_tokens=500, multiagent = False):
     """
     Generate a complete lecture by analyzing images in sequence, maintaining context.
     
@@ -174,6 +245,7 @@ def generate_lecture_from_images_openai(client, image_dir, prompt, faiss_textboo
     :param context_size: Number of previous slides to consider for context
     :param model_name: The name of the model to use
     :param max_tokens: The maximum number of tokens to generate
+    :param multiagent: Whether to use multi-agent refinement
     :return: A list of content for each slide, and the list of image files corresponding to each slide
     """
     image_files = sorted([f for f in os.listdir(image_dir) if f.endswith('.png')])
@@ -226,6 +298,10 @@ def generate_lecture_from_images_openai(client, image_dir, prompt, faiss_textboo
         logger.info(f"Completed slide {i}/{total_slides}")
     
     logger.info(f"Lecture generation completed: all {total_slides} slides processed")
+    if multiagent:
+        logger.info("Starting multi-agent refinement")
+        contents = multiagent_generation(client, contents, model_name=model_name)
+        logger.info("Multi-agent refinement completed")
     return contents, image_files
 
 def digest_lecture_openai(client, complete_lecture, digest_prompt, model_name="gpt-4o-mini"):
