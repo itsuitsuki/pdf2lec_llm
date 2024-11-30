@@ -107,7 +107,15 @@ async def lec_generate(lec_args: LecGenerateArgs):
     task_id = str(uuid.uuid4())
     logger.debug(f"Task {task_id}: lec_args: {lec_args}")
     # 将任务状态设置为 "pending"
-    redis_client.set(task_id, json.dumps({"status": "pending"}))
+    base_dir = f"./data/{lec_args.pdf_name}"
+    with open(f"{base_dir}/metadata.json", "r") as f:
+        metadata = json.load(f)
+    metadata["status"] = "generating"
+    with open(f"{base_dir}/metadata.json", "w") as f:
+        json.dump(metadata, f, indent=2)
+
+    # 将任务状态设置为 "generating"
+    redis_client.set(task_id, json.dumps({"status": "generating"}))
     
     # 添加后台任务
     # background_tasks.add_task(generate_content, task_id, lec_args)
