@@ -9,6 +9,8 @@ import {
   faChevronUp,
 } from "@fortawesome/free-solid-svg-icons";
 import Transcript from "./Transcript";
+import { getAuthHeaders } from "../utils/auth";
+import { getAudioBlob } from "../utils/audio";
 
 interface CarouselProps {
   pdfId: string;
@@ -48,16 +50,24 @@ const Carousel: React.FC<CarouselProps> = ({ pdfId, audioTimestamps, timestamp }
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [audioUrl, setAudioUrl] = useState<string>('');
+  const baseAudioUrl = `http://localhost:5000/data/${pdfId}/generated_audios/combined.mp3`;
 
-  // 修改 URL 构建方式
-  const pdfUrl = `http://localhost:5000/data/${pdfId}/Input_${timestamp}`;
-  const audioUrl = `http://localhost:5000/data/${pdfId}/generated_audios/combined.mp3`;
+  // 修改 URL 构建方式，添加认证头
+  const headers = getAuthHeaders();
+  const pdfUrl = `http://localhost:5000/data/${pdfId}/${timestamp}`;
 
   useEffect(() => {
     const loadPdf = async () => {
       try {
         console.log('Loading PDF from URL:', pdfUrl);
-        const loadingTask = pdfjs.getDocument(pdfUrl);
+        const token = localStorage.getItem('token');
+        const loadingTask = pdfjs.getDocument({
+          url: pdfUrl,
+          httpHeaders: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
         const pdf = await loadingTask.promise;
         console.log('PDF loaded successfully, pages:', pdf.numPages);
         const slideImages: string[] = [];
@@ -85,6 +95,26 @@ const Carousel: React.FC<CarouselProps> = ({ pdfId, audioTimestamps, timestamp }
 
     loadPdf();
   }, [pdfUrl]);
+
+  useEffect(() => {
+    const loadAudio = async () => {
+      try {
+        const url = await getAudioBlob(baseAudioUrl);
+        setAudioUrl(url);
+      } catch (error) {
+        console.error('Error loading audio:', error);
+      }
+    };
+    
+    loadAudio();
+    
+    return () => {
+      // Clean up object URL when component unmounts
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+      }
+    };
+  }, [baseAudioUrl]);
 
   useEffect(() => {
     const audioElement = audioRef.current;

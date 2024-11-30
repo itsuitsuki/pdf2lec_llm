@@ -4,6 +4,8 @@ import Carousel from "../components/Carousel";
 import "../styles/Display.css";
 import { pdfAPI } from "../api/pdf";
 import Chatbot from "../components/Chatbot";
+import { useAuth } from "../contexts/AuthContext";
+import { getAuthHeaders } from "../utils/auth";
 
 interface Metadata {
   timestamp: string;
@@ -13,7 +15,8 @@ interface Metadata {
 }
 
 const Display = () => {
-  const { pdfId } = useParams();
+  const { pdfId } = useParams<{ pdfId: string }>();
+  const { hasAccessToPdf } = useAuth();
   const navigate = useNavigate();
   const [metadata, setMetadata] = useState<Metadata | null>(null);
   const [loading, setLoading] = useState(true);
@@ -21,7 +24,9 @@ const Display = () => {
   useEffect(() => {
     const fetchMetadata = async () => {
       try {
-        const response = await fetch(`http://localhost:5000/data/${pdfId}/metadata.json`);
+        const response = await fetch(`http://localhost:5000/data/${pdfId}/metadata.json`, {
+          headers: getAuthHeaders()
+        });
         if (!response.ok) {
           throw new Error('Failed to fetch metadata');
         }
@@ -30,10 +35,7 @@ const Display = () => {
           navigate(`/configure/${pdfId}`);
           return;
         }
-        setMetadata({
-          ...data,
-          original_filename: data.original_filename
-        });
+        setMetadata(data);
       } catch (error) {
         console.error('Error fetching metadata:', error);
         navigate('/');
@@ -58,13 +60,11 @@ const Display = () => {
   return (
     <div className="display-container">
       <div className="main-content">
-        {metadata && (
-          <Carousel
-            pdfId={pdfId!}
-            audioTimestamps={metadata.audio_timestamps}
-            timestamp={metadata.original_filename}
-          />
-        )}
+        <Carousel
+          pdfId={pdfId!}
+          audioTimestamps={metadata.audio_timestamps || []}
+          timestamp={metadata.original_filename}
+        />
       </div>
       <div className="chatbot-section">
         <Chatbot />

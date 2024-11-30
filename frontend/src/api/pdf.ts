@@ -13,6 +13,20 @@ const axiosInstance = axios.create({
   },
 });
 
+// 添加请求拦截器
+axiosInstance.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
 export const pdfAPI = {
   uploadSlide: async (formData: FormData) => {
     console.log('=== API: uploadSlide called ===');
@@ -48,7 +62,7 @@ export const pdfAPI = {
 
   deletePDF: async (type: 'slide' | 'textbook', id: string) => {
     try {
-      const response = await axios.delete(`${API_BASE_URL}/pdfs/${type}/${id}`);
+      const response = await axiosInstance.delete(`/pdfs/${type}/${id}`);
       return response;
     } catch (error: any) {
       if (error.response) {

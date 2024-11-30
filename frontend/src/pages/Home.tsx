@@ -303,7 +303,7 @@ const Home = () => {
                           <ListItemText
                             sx={{ cursor: "pointer" }}
                             onClick={() => showPDF(pdf)}
-                            primary={<h3>{pdf.filename.split('_').slice(1).join('_')}</h3>}
+                            primary={<h3>{pdf.displayName}</h3>}
                           />
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
