@@ -58,12 +58,16 @@ def analyze_page_by_image_openai(client, prompt, image_path, textbook_content=No
 def convert_pdf_to_images(pdf_path, output_dir):
     """
     Convert each page of a PDF file to an image and save them to the specified output directory.
-
-    :param pdf_path: Path to the PDF file
-    :param output_dir: Directory to save the converted images
+    Also adds page numbers at the bottom of each image.
     """
+    # Constants for page number rendering
+    FONT = cv2.FONT_HERSHEY_SIMPLEX
+    FONT_SCALE = 2.0
+    FONT_COLOR = (0, 0, 0)  # Black color
+    FONT_THICKNESS = 3
+    PADDING_BOTTOM = 60  # Space for page numbers
+
     # Create the output directory if it doesn't exist
-    # pdf_name = Path(pdf_path).stem
     image_dir = Path(output_dir)
     image_dir.mkdir(parents=True, exist_ok=True)
 
@@ -73,9 +77,31 @@ def convert_pdf_to_images(pdf_path, output_dir):
     logger.info(f"Converting PDF to images: {total_pages} pages total")
     
     for page_num, page in enumerate(doc, 1):
+        # Convert PDF page to image
         pix = page.get_pixmap(matrix=pymupdf.Matrix(300/72, 300/72))
+        
+        # Convert PyMuPDF pixmap to numpy array (OpenCV format)
+        img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
+            pix.height, pix.width, pix.n)
+        
+        if pix.n == 4:  # RGBA
+            img = cv2.cvtColor(img, cv2.COLOR_RGBA2RGB)
+        
+        # Add padding at bottom for page number
+        img = cv2.copyMakeBorder(img, 0, PADDING_BOTTOM, 0, 0, 
+                                cv2.BORDER_CONSTANT, value=(255, 255, 255))
+        
+        # Add page number
+        page_text = f"{page_num}/{total_pages}"
+        text_size = cv2.getTextSize(page_text, FONT, FONT_SCALE, FONT_THICKNESS)[0]
+        text_x = (img.shape[1] - text_size[0]) // 2
+        text_y = img.shape[0] - (PADDING_BOTTOM // 3)
+        cv2.putText(img, page_text, (text_x, text_y), FONT, 
+                   FONT_SCALE, FONT_COLOR, FONT_THICKNESS)
+        
+        # Save the image
         image_filename = f"page_{page_num}.png"
-        pix.save(image_dir / image_filename)
+        cv2.imwrite(str(image_dir / image_filename), img)
         logger.info(f"Converted page {page_num}/{total_pages} to image")
     
     logger.info(f"PDF conversion completed: all {total_pages} pages converted to images")
@@ -124,39 +150,82 @@ def merge_similar_images(image_dir, output_dir, similarity_threshold=0.4, max_me
     total_groups = len(merged_groups)
     logger.info(f"Merging {total_groups} groups of similar images")
     
+    # Add these constants at the beginning of the function
+    BORDER_SIZE = 10  # Size of black border in pixels
+    
     for i, group in enumerate(merged_groups, 1):
         if len(group) == 1:
             merged = cv2.imread(os.path.join(image_dir, group[0]))
         else:
             images = [cv2.imread(os.path.join(image_dir, f)) for f in group]
             
-            # 计算目标尺寸
+            # Calculate target size
             max_height = max(img.shape[0] for img in images)
             max_width = max(img.shape[1] for img in images)
             
             if len(group) == 2:
-                # 两张图片横向排列
+                # Two images side by side with black border
                 resized_images = [cv2.resize(img, (max_width, max_height)) for img in images]
-                merged = np.hstack(resized_images)
+                merged = np.hstack([
+                    resized_images[0],
+                    np.zeros((max_height, BORDER_SIZE, 3), dtype=np.uint8),
+                    resized_images[1]
+                ])
                 
             elif len(group) == 3:
-                # 前两张横向，第三张在下方
-                img1, img2, img3 = images
-                # 调整前两张图片大小并横向合并
-                resized_top = [cv2.resize(img, (max_width, max_height)) for img in [img1, img2]]
-                top_row = np.hstack(resized_top)
-                # 调整第三张图片大小以匹配上方宽度
-                bottom_img = cv2.resize(img3, (top_row.shape[1], max_height))
-                merged = np.vstack([top_row, bottom_img])
+                # Two images on top, one below (aligned with first image)
+                resized_images = [cv2.resize(img, (max_width, max_height)) for img in images[:2]]
+                # Create top row with first two images
+                top_row = np.hstack([
+                    resized_images[0],
+                    np.zeros((max_height, BORDER_SIZE, 3), dtype=np.uint8),
+                    resized_images[1]
+                ])
+                
+                # Calculate the width of the third image to maintain aspect ratio
+                third_img = images[2]
+                aspect_ratio = third_img.shape[1] / third_img.shape[0]
+                new_height = max_height
+                new_width = int(new_height * aspect_ratio)
+                
+                # Resize third image maintaining aspect ratio
+                bottom_img = cv2.resize(third_img, (new_width, new_height))
+                
+                # Create bottom row with padding to match top row width
+                padding_width = (top_row.shape[1] - new_width) // 2
+                bottom_row = np.hstack([
+                    np.zeros((max_height, padding_width, 3), dtype=np.uint8),
+                    bottom_img,
+                    np.zeros((max_height, top_row.shape[1] - new_width - padding_width, 3), dtype=np.uint8)
+                ])
+                
+                # Stack top and bottom rows
+                merged = np.vstack([
+                    top_row,
+                    np.zeros((BORDER_SIZE, top_row.shape[1], 3), dtype=np.uint8),
+                    bottom_row
+                ])
                 
             elif len(group) == 4:
-                # 2x2 网格排列
+                # 2x2 grid with borders
                 resized_images = [cv2.resize(img, (max_width, max_height)) for img in images]
-                top_row = np.hstack([resized_images[0], resized_images[1]])
-                bottom_row = np.hstack([resized_images[2], resized_images[3]])
-                merged = np.vstack([top_row, bottom_row])
+                top_row = np.hstack([
+                    resized_images[0],
+                    np.zeros((max_height, BORDER_SIZE, 3), dtype=np.uint8),
+                    resized_images[1]
+                ])
+                bottom_row = np.hstack([
+                    resized_images[2],
+                    np.zeros((max_height, BORDER_SIZE, 3), dtype=np.uint8),
+                    resized_images[3]
+                ])
+                merged = np.vstack([
+                    top_row,
+                    np.zeros((BORDER_SIZE, top_row.shape[1], 3), dtype=np.uint8),
+                    bottom_row
+                ])
 
-        # Use the first image's number in the group for naming
+        # Save merged image
         first_num = int(group[0].split('_')[1].split('.')[0])
         cv2.imwrite(os.path.join(output_dir, f'merged_{first_num:03d}.png'), merged)
         logger.info(f"Merged group {i}/{total_groups} ({len(group)} images)")

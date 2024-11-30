@@ -700,6 +700,64 @@ async def chatbot(request: Request):
             content={"reply": "Sorry, something went wrong. Please try again later."}
         )
 
+@app.post("/api/v1/test_image_merge")
+async def test_image_merge(file: UploadFile = File(...)):
+    """Test endpoint for image merging process only"""
+    logger = logging.getLogger("uvicorn")
+    try:
+        # Validate and save the file
+        FileValidator.validate(file, "slide")
+        sanitized_filename = FileValidator.sanitize_filename(file.filename)
+        
+        # Create unique timestamp directory
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        unique_id = f"test_{timestamp}_{uuid.uuid4().hex[:8]}"
+        base_dir = f"./data/{unique_id}"
+        
+        # Create directory structure
+        os.makedirs(base_dir, exist_ok=True)
+        os.makedirs(f"{base_dir}/images", exist_ok=True)
+        os.makedirs(f"{base_dir}/merged_images", exist_ok=True)
+        
+        # Save PDF file
+        pdf_path = os.path.join(base_dir, f"Input_{sanitized_filename}")
+        with open(pdf_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # Create metadata
+        metadata = {
+            "id": unique_id,
+            "original_filename": sanitized_filename,
+            "type": "test_merge",
+            "timestamp": timestamp,
+            "status": "processing"
+        }
+        
+        with open(os.path.join(base_dir, "metadata.json"), "w") as f:
+            json.dump(metadata, f, indent=2)
+            
+        # Process images
+        convert_pdf_to_images(pdf_path, f"{base_dir}/images")
+        merge_similar_images(f"{base_dir}/images", f"{base_dir}/merged_images", 
+                           similarity_threshold=0.4)
+        
+        metadata["status"] = "completed"
+        with open(os.path.join(base_dir, "metadata.json"), "w") as f:
+            json.dump(metadata, f, indent=2)
+            
+        return JSONResponse(
+            content={
+                "id": unique_id,
+                "path": f"/data/{unique_id}",
+                "message": "Image processing completed successfully"
+            },
+            status_code=200
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in test_image_merge: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser()
