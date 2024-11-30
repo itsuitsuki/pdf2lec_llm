@@ -1,6 +1,6 @@
 import os
 os.environ["TQDM_DISABLE"] = "1"
-from fastapi import FastAPI, HTTPException, Request, UploadFile, File
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Depends
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from src.arg_models import LecGenerateArgs, PDFSplitMergeArgs
@@ -27,6 +27,15 @@ from mimetypes import guess_type
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
+from models.user import UserCreate, UserLogin, Token
+from utils.auth import get_password_hash, verify_password, create_access_token, get_current_user
+import aiofiles
+from fastapi.responses import FileResponse
+from fastapi import Request
+from jose import JWTError, jwt
+from utils.auth import SECRET_KEY, ALGORITHM
+from starlette.responses import Response
+from starlette.types import Scope, Receive, Send
 
 # create a Redis client and FastAPI app
 redis_client = None
@@ -44,7 +53,54 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/data", StaticFiles(directory="data"), name="data")
+class AuthenticatedStaticFiles(StaticFiles):
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            return await super().__call__(scope, receive, send)
+            
+        # 获取请求路径
+        path = scope.get("path", "")
+        
+        # 获取认证头
+        headers = dict(scope.get("headers", []))
+        auth_header = headers.get(b"authorization", b"").decode()
+        
+        if not auth_header or not auth_header.startswith("Bearer "):
+            response = Response(
+                status_code=401,
+                content="Not authenticated",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+            return await response(scope, receive, send)
+            
+        try:
+            token = auth_header.split(" ")[1]
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            email = payload.get("sub")
+            
+            if not email:
+                response = Response(status_code=401, content="Invalid token")
+                return await response(scope, receive, send)
+            
+            # 从路径中提取 PDF ID
+            path_parts = path.split("/")
+            if len(path_parts) > 2:
+                pdf_id = path_parts[2]  # 获取路径中的 PDF ID
+                
+                # 检查用户是否有权限访问该 PDF
+                user = users_db.get(email)
+                if not user or pdf_id not in user.get('accessible_pdfs', []):
+                    response = Response(status_code=403, content="Access denied")
+                    return await response(scope, receive, send)
+                    
+            return await super().__call__(scope, receive, send)
+            
+        except JWTError:
+            response = Response(status_code=401, content="Invalid token")
+            return await response(scope, receive, send)
+
+# 使用自定义的认证静态文件中间件
+app.mount("/data", AuthenticatedStaticFiles(directory="data"), name="data")
 
 @app.exception_handler(ValidationError)
 async def validation_exception_handler(request: Request, exc: ValidationError):
@@ -475,57 +531,54 @@ def generate_unique_id():
     return f"{timestamp}_{random_suffix}"
 
 @app.post("/api/v1/upload-slide")
-async def upload_slide(file: UploadFile = File(...)):
-    """Upload slide PDF file"""
+async def upload_slide(
+    file: UploadFile = File(...),
+    current_user: str = Depends(get_current_user)
+):
     logger = logging.getLogger("uvicorn")
     try:
         FileValidator.validate(file, "slide")
-        unique_id = generate_unique_id()
         sanitized_filename = FileValidator.sanitize_filename(file.filename)
         
-        # 创建新的目录结构
+        # 生成唯一ID
+        unique_id = generate_unique_id()
+        
+        # 创建目录
         base_dir = f"./data/{unique_id}"
         os.makedirs(base_dir, exist_ok=True)
         
-        # 保存PDF文件
-        pdf_path = os.path.join(base_dir, f"Input_{sanitized_filename}")
-        with open(pdf_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        # 创建metadata.json
+        file_path = os.path.join(base_dir, f"{sanitized_filename}")
+        async with aiofiles.open(file_path, 'wb') as f:
+            content = await file.read()
+            await f.write(content)
+            
+        # 创建并保存元数据
         metadata = {
-            "id": unique_id,
-            "original_filename": sanitized_filename,
-            "type": "slide",
-            "timestamp": datetime.datetime.now().isoformat(),
-            "status": "pending"
+            "original_filename": f"{sanitized_filename}",
+            "upload_time": datetime.datetime.now().isoformat(),
+            "status": "pending",
+            "uploader": current_user,
+            "audio_timestamps": []
         }
         
-        with open(os.path.join(base_dir, "metadata.json"), "w") as f:
-            json.dump(metadata, f, indent=2)
-            
-        return JSONResponse(
-            content={
-                "id": unique_id,
-                "filename": sanitized_filename,
-                "path": f"/data/{unique_id}/Input_{sanitized_filename}",
-                "type": "slide",
-                "message": "File uploaded successfully"
-            },
-            status_code=200
-        )
-    except HTTPException as e:
-        logger.error(f"File validation failed: {str(e)}")
-        return JSONResponse(
-            content={"detail": str(e.detail)},
-            status_code=e.status_code
-        )
+        with open(os.path.join(base_dir, "metadata.json"), 'w') as f:
+            json.dump(metadata, f)
+        
+        # 将PDF ID添加到用户的可访问列表中
+        user = users_db[current_user]
+        if 'accessible_pdfs' not in user:
+            user['accessible_pdfs'] = []
+        user['accessible_pdfs'].append(unique_id)
+        
+        return {
+            "id": unique_id,
+            "filename": sanitized_filename,
+            "type": "slide",
+            "metadata": metadata
+        }
     except Exception as e:
-        logger.error(f"File upload failed: {str(e)}")
-        return JSONResponse(
-            content={"detail": str(e)},
-            status_code=500
-        )
+        logger.error(f"Upload failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/v1/upload-textbook/{slide_id}")
 async def upload_textbook(slide_id: str, file: UploadFile = File(...)):
@@ -545,14 +598,14 @@ async def upload_textbook(slide_id: str, file: UploadFile = File(...)):
             metadata = json.load(f)
             
         # 保存教科书文件
-        pdf_path = os.path.join(base_dir, f"Input_{sanitized_filename}")
+        pdf_path = os.path.join(base_dir, f"{sanitized_filename}")
         with open(pdf_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
         # 更新 metadata
         metadata.update({
             "textbook_filename": sanitized_filename,
-            "textbook_path": f"/data/{slide_id}/Input_{sanitized_filename}",
+            "textbook_path": f"/data/{slide_id}/{sanitized_filename}",
             "has_textbook": True,
             "updated_at": datetime.datetime.now().isoformat()
         })
@@ -565,7 +618,7 @@ async def upload_textbook(slide_id: str, file: UploadFile = File(...)):
             content={
                 "id": slide_id,
                 "filename": sanitized_filename,
-                "path": f"/data/{slide_id}/Input_{sanitized_filename}",
+                "path": f"/data/{slide_id}/{sanitized_filename}",
                 "type": "textbook",
                 "metadata": metadata
             },
@@ -578,41 +631,30 @@ async def upload_textbook(slide_id: str, file: UploadFile = File(...)):
         logger.error(f"File upload failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/v1/pdfs/{file_type}")
-async def get_pdfs(file_type: str) -> List[dict]:
-    """Get list of PDFs by type"""
+@app.get("/api/v1/pdfs/{type}")
+async def get_pdfs(type: str, current_user: str = Depends(get_current_user)):
+    """Get all PDFs of specified type"""
     logger = logging.getLogger("uvicorn")
     try:
-        if file_type not in ["slide", "textbook"]:
+        if type not in ["slide", "textbook"]:
             raise HTTPException(status_code=400, detail="Invalid file type")
-            
-        base_dir = "./data"
-        files = []
+
+        # 获取用户信息
+        user = users_db.get(current_user)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # 获取用户可访问的PDF列表
+        accessible_pdfs = user.get('accessible_pdfs', [])
         
-        # 遍历所有任务目录
-        for dir_name in os.listdir(base_dir):
-            dir_path = os.path.join(base_dir, dir_name)
-            if not os.path.isdir(dir_path):
-                continue
-                
-            metadata_path = os.path.join(dir_path, "metadata.json")
-            if not os.path.exists(metadata_path):
-                continue
-                
-            with open(metadata_path, 'r') as f:
-                metadata = json.load(f)
-                
-            if metadata.get('type') == file_type:
-                files.append({
-                    "id": metadata['id'],
-                    "filename": f"Input_{metadata['original_filename']}",
-                    "path": f"/data/{dir_name}/Input_{metadata['original_filename']}",
-                    "type": file_type,
-                    "metadata": metadata
-                })
+        # 获取所有PDF并过滤
+        all_pdfs = get_all_pdfs(type)
+        filtered_pdfs = [
+            pdf for pdf in all_pdfs 
+            if pdf['id'] in accessible_pdfs
+        ]
         
-        logger.debug(f"Returning {len(files)} PDF files")
-        return files
+        return filtered_pdfs
     except Exception as e:
         logger.error(f"Error getting PDFs: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -636,20 +678,39 @@ async def delete_pdf(file_type: str, pdf_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/v1/pdfs")
-async def get_all_pdfs() -> dict:
-    """Get all PDFs grouped by type"""
-    logger = logging.getLogger("uvicorn")
-    try:
-        slides = await get_pdfs("slide")
-        textbooks = await get_pdfs("textbook")
-        
-        return {
-            "slides": slides,
-            "textbooks": textbooks
-        }
-    except Exception as e:
-        logger.error(f"File retrieval failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+def get_all_pdfs(file_type: str) -> list:
+    """
+    获取指定类型的所有PDF文件
+    :param file_type: 文件类型 ('slide' 或 'textbook')
+    :return: PDF文件列表
+    """
+    pdfs = []
+    data_dir = "./data"
+    
+    if not os.path.exists(data_dir):
+        return pdfs
+
+    for pdf_id in os.listdir(data_dir):
+        pdf_path = os.path.join(data_dir, pdf_id)
+        if not os.path.isdir(pdf_path):
+            continue
+
+        if file_type == "slide":
+            input_files = [f for f in os.listdir(pdf_path) if f.endswith(".pdf")]
+            if input_files:
+                metadata_file = os.path.join(pdf_path, "metadata.json")
+                metadata = {}
+                if os.path.exists(metadata_file):
+                    with open(metadata_file, 'r') as f:
+                        metadata = json.load(f)
+                
+                pdfs.append({
+                    "id": pdf_id,
+                    "filename": input_files[0],
+                    "metadata": metadata
+                })
+
+    return pdfs
 
 @app.post("/api/v1/chatbot")
 async def chatbot(request: Request):
@@ -728,7 +789,7 @@ async def test_image_merge(file: UploadFile = File(...)):
         os.makedirs(f"{base_dir}/merged_images", exist_ok=True)
         
         # Save PDF file
-        pdf_path = os.path.join(base_dir, f"Input_{sanitized_filename}")
+        pdf_path = os.path.join(base_dir, f"{sanitized_filename}")
         with open(pdf_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
@@ -765,6 +826,45 @@ async def test_image_merge(file: UploadFile = File(...)):
     except Exception as e:
         logger.error(f"Error in test_image_merge: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+users_db = {}
+
+@app.post("/api/v1/register")
+async def register(user: UserCreate):
+    if user.email in users_db:
+        raise HTTPException(
+            status_code=400,
+            detail="Email already registered"
+        )
+    hashed_password = get_password_hash(user.password)
+    user_dict = user.dict()
+    user_dict["id"] = str(uuid.uuid4())
+    user_dict["hashed_password"] = hashed_password
+    del user_dict["password"]
+    users_db[user.email] = user_dict
+    return {"message": "User created successfully"}
+
+@app.post("/api/v1/login")
+async def login(user_credentials: UserLogin):
+    user = users_db.get(user_credentials.email)
+    if not user or not verify_password(user_credentials.password, user["hashed_password"]):
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect email or password"
+        )
+    access_token = create_access_token(data={"sub": user["email"]})
+    return Token(access_token=access_token)
+
+@app.get("/api/v1/me")
+async def read_users_me(current_user: str = Depends(get_current_user)):
+    user = users_db.get(current_user)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {
+        "email": user["email"],
+        "username": user["username"],
+        "id": user["id"]
+    }
 
 if __name__ == "__main__":
     

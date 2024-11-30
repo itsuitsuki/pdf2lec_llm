@@ -81,7 +81,7 @@ def pdf2lec(_args: LecGenerateArgs, task_id):
             metadata = json.load(f)
         
         original_filename = metadata.get('original_filename')
-        PDF_PATH = f"{base_dir}/Input_{original_filename}"
+        PDF_PATH = f"{base_dir}/{original_filename}"
         
         # 更新目录路径
         generated_lecture_dir = f"{base_dir}/generated_texts"
@@ -131,7 +131,7 @@ def pdf2lec(_args: LecGenerateArgs, task_id):
             
             if _args.textbook_name and _args.use_rag:
                 # 使用同一目录下的教科书文件
-                textbook_path = f"{base_dir}/Input_{_args.textbook_name}"
+                textbook_path = f"{base_dir}/{_args.textbook_name}"
                 logger.info(f"Task {task_id}: Initializing textbook indexer")
                 logger.debug(f"Task {task_id}: Textbook path: {textbook_path}")
                 

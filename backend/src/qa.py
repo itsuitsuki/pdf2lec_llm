@@ -42,7 +42,7 @@ def single_gen_answer(qa_args: QAArgs, pdf_content: dict, transcript: str, past_
     pdf_name = qa_args.pdf_name
     base_dir = f"./data/{pdf_name}"
     if qa_args.textbook_name and qa_args.use_rag:
-        textbook_path = os.path.join(base_dir, f"Input_{qa_args.textbook_name}")
+        textbook_path = os.path.join(base_dir, f"{qa_args.textbook_name}")
         # logger.info(f"Task {qa_args.task_id}: Initializing textbook indexer")
         logger.debug(f"Task {qa_args.task_id}: Textbook path: {textbook_path}")
         if not os.path.exists(textbook_path):
