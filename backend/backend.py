@@ -36,6 +36,8 @@ from jose import JWTError, jwt
 from utils.auth import SECRET_KEY, ALGORITHM
 from starlette.responses import Response
 from starlette.types import Scope, Receive, Send
+from dal.user_dal import UserDAL
+
 
 # create a Redis client and FastAPI app
 redis_client = None
@@ -44,6 +46,7 @@ app = FastAPI()
 n_workers = 4
 executor = ThreadPoolExecutor(max_workers=n_workers - n_workers // 2)
 qa_executor = ThreadPoolExecutor(max_workers=n_workers // 2)
+user_dal = None
 
 app.add_middleware(
     CORSMiddleware,
@@ -54,50 +57,38 @@ app.add_middleware(
 )
 
 class AuthenticatedStaticFiles(StaticFiles):
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http":
-            return await super().__call__(scope, receive, send)
-            
-        # 获取请求路径
+    async def __call__(self, scope, receive, send):
+        # 从 scope 中获取请求路径
         path = scope.get("path", "")
         
-        # 获取认证头
-        headers = dict(scope.get("headers", []))
-        auth_header = headers.get(b"authorization", b"").decode()
-        
-        if not auth_header or not auth_header.startswith("Bearer "):
-            response = Response(
-                status_code=401,
-                content="Not authenticated",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-            return await response(scope, receive, send)
-            
+        # 验证 token
         try:
-            token = auth_header.split(" ")[1]
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-            email = payload.get("sub")
-            
-            if not email:
-                response = Response(status_code=401, content="Invalid token")
+            auth_header = next((h[1].decode() for h in scope.get("headers", []) if h[0].decode() == "authorization"), None)
+            if not auth_header or not auth_header.startswith("Bearer "):
+                response = Response(status_code=401, content="Authorization header missing or invalid")
                 return await response(scope, receive, send)
+            
+            token = auth_header.split(" ")[1]
+            email = await get_current_user(token)
             
             # 从路径中提取 PDF ID
             path_parts = path.split("/")
             if len(path_parts) > 2:
                 pdf_id = path_parts[2]  # 获取路径中的 PDF ID
                 
-                # 检查用户是否有权限访问该 PDF
-                user = users_db.get(email)
+                user = user_dal.get_user(email)
                 if not user or pdf_id not in user.get('accessible_pdfs', []):
                     response = Response(status_code=403, content="Access denied")
                     return await response(scope, receive, send)
-                    
-            return await super().__call__(scope, receive, send)
             
-        except JWTError:
-            response = Response(status_code=401, content="Invalid token")
+        except HTTPException as e:
+            response = Response(status_code=e.status_code, content=str(e.detail))
             return await response(scope, receive, send)
+        except Exception as e:
+            response = Response(status_code=500, content=str(e))
+            return await response(scope, receive, send)
+        
+        return await super().__call__(scope, receive, send)
 
 # 使用自定义的认证静态文件中间件
 app.mount("/data", AuthenticatedStaticFiles(directory="data"), name="data")
@@ -565,10 +556,14 @@ async def upload_slide(
             json.dump(metadata, f)
         
         # 将PDF ID添加到用户的可访问列表中
-        user = users_db[current_user]
+        user = user_dal.get_user(current_user)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
         if 'accessible_pdfs' not in user:
             user['accessible_pdfs'] = []
         user['accessible_pdfs'].append(unique_id)
+        user_dal.update_user(current_user, user)  # 更新用户数据
         
         return {
             "id": unique_id,
@@ -640,7 +635,7 @@ async def get_pdfs(type: str, current_user: str = Depends(get_current_user)):
             raise HTTPException(status_code=400, detail="Invalid file type")
 
         # 获取用户信息
-        user = users_db.get(current_user)
+        user = user_dal.get_user(current_user)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
@@ -827,26 +822,33 @@ async def test_image_merge(file: UploadFile = File(...)):
         logger.error(f"Error in test_image_merge: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-users_db = {}
+
 
 @app.post("/api/v1/register")
 async def register(user: UserCreate):
-    if user.email in users_db:
+    if user_dal.get_user(user.email):
         raise HTTPException(
             status_code=400,
             detail="Email already registered"
         )
+    
     hashed_password = get_password_hash(user.password)
     user_dict = user.dict()
     user_dict["id"] = str(uuid.uuid4())
     user_dict["hashed_password"] = hashed_password
+    user_dict["accessible_pdfs"] = []
     del user_dict["password"]
-    users_db[user.email] = user_dict
+    
+    if not user_dal.create_user(user_dict):
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to create user"
+        )
     return {"message": "User created successfully"}
 
 @app.post("/api/v1/login")
 async def login(user_credentials: UserLogin):
-    user = users_db.get(user_credentials.email)
+    user = user_dal.get_user(user_credentials.email)
     if not user or not verify_password(user_credentials.password, user["hashed_password"]):
         raise HTTPException(
             status_code=401,
@@ -857,7 +859,7 @@ async def login(user_credentials: UserLogin):
 
 @app.get("/api/v1/me")
 async def read_users_me(current_user: str = Depends(get_current_user)):
-    user = users_db.get(current_user)
+    user = user_dal.get_user(current_user)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return {
@@ -865,6 +867,17 @@ async def read_users_me(current_user: str = Depends(get_current_user)):
         "username": user["username"],
         "id": user["id"]
     }
+
+def init_user_dal(redis_port):
+    """初始化用户 DAL"""
+    global user_dal
+    users_redis_client = redis.Redis(
+        host='localhost', 
+        port=redis_port, 
+        db=2,
+        decode_responses=True
+    )
+    user_dal = UserDAL(users_redis_client)
 
 if __name__ == "__main__":
     
@@ -899,5 +912,7 @@ if __name__ == "__main__":
     atexit.register(clear_uncompleted_data_sync)
     atexit.register(main_redis_set_panding_to_failed)
     atexit.register(lambda: redis_client.close())
+    
+    init_user_dal(args.redis_port)
     
     uvicorn.run(app, host="0.0.0.0", port=args.port)
