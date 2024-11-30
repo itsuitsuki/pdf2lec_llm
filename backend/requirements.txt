@@ -12,5 +12,6 @@ pymupdf==1.24.13
 tqdm==4.66.5
 uvicorn==0.32.0
 pillow
+redis
 python-multipart
 pypdf
