@@ -32,6 +32,6 @@ export interface GenerateOptions {
 export interface Metadata {
     timestamp: string;
     audio_timestamps: number[];
-    status: 'pending' | 'completed' | 'failed';
+    status: 'pending' | 'generating' | 'completed' | 'failed';
     original_filename: string;
 }

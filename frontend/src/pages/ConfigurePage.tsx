@@ -45,8 +45,11 @@ const ConfigurePage = () => {
         textbook_name: textbookName,
       });
 
-      // 生成开始后返回主页
-      navigate('/');
+      // 存储任务ID
+      localStorage.setItem('lastGenerationTask', response.data.task_id);
+      
+      // 导航到主页并触发立即轮询
+      navigate('/', { state: { shouldPoll: true } });
     } catch (error) {
       console.error('Generation failed:', error);
       alert('Failed to start generation. Please try again.');
