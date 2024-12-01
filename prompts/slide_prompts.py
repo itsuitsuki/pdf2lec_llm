@@ -1,8 +1,8 @@
-def get_each_page_prompt():
-    EACH_PAGE_PROMPT_PATH = './prompts/each_page_prompt' # Path to the prompt file
-    with open(EACH_PAGE_PROMPT_PATH, 'r') as file:
-        each_page_prompt = file.read()
-    return each_page_prompt
+def get_default_prompt():
+    DEFAULT_PROMPT_PATH = './prompts/default_prompt' # Path to the prompt file
+    with open(DEFAULT_PROMPT_PATH, 'r') as file:
+        default_prompt = file.read()
+    return default_prompt
 
 def get_detailed_prompt():
     DETAILED_PROMPT_PATH = './prompts/detailed_prompt' # Path to the prompt file
@@ -26,7 +26,7 @@ def get_each_page_prompt(complexity):
     if complexity == 1:
         return get_brief_prompt()
     if complexity == 2:
-        return get_each_page_prompt()
+        return get_default_prompt()
     if complexity == 3:
         return get_detailed_prompt()
     else:
