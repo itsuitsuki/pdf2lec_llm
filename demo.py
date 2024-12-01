@@ -10,7 +10,7 @@ SIMILARITY_THRESHOLD_TO_MERGE = 0.4
 TEXT_GENERATING_CONTEXT_SIZE = 2
 MAX_TOKENS = 1000
 
-TEST_PDF_NAME = "Physics89-ODELectureNotes-final-UPDATED-20241002-pages-1-vmultiagent"
+TEST_PDF_NAME = "Accounting_brief_10pages"
 PDF_PATH = f"./test/{TEST_PDF_NAME}.pdf"
 
 PAGE_MODEL = "gpt-4o"
@@ -20,7 +20,7 @@ TTS_VOICE = "alloy"
 
 # NOTE: if True, regenerate the lecture content and summary regardless of whether the files already exist
 DO_REGENERATE = True
-USE_MULTIAGENT = True
+USE_MULTIAGENT = False
 
 client = OpenAI()
 
