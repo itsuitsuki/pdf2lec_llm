@@ -21,3 +21,13 @@ def get_summarizing_prompt():
     with open(SUMMARIZING_PROMPT_PATH, 'r') as file:
         summarizing_prompt = file.read()
     return summarizing_prompt
+
+def get_each_page_prompt(complexity):
+    if complexity == 1:
+        return get_brief_prompt()
+    if complexity == 2:
+        return get_each_page_prompt()
+    if complexity == 3:
+        return get_detailed_prompt()
+    else:
+        return 1

@@ -17,6 +17,7 @@ PAGE_MODEL = "gpt-4o"
 SUMMARIZATION_MODEL = "gpt-4o-mini"
 TTS_MODEL = "tts-1"
 TTS_VOICE = "alloy"
+COMPLEXITY = 1 # 1=brief, 2=default, 3=detailed
 
 # NOTE: if True, regenerate the lecture content and summary regardless of whether the files already exist
 DO_REGENERATE = True
@@ -53,8 +54,9 @@ else:
     merge_similar_images(image_dir, merged_image_dir,
                          similarity_threshold=SIMILARITY_THRESHOLD_TO_MERGE)
 
-    content_list, image_files = generate_lecture_from_images_openai(client, merged_image_dir, get_brief_prompt(
-    ), context_size=TEXT_GENERATING_CONTEXT_SIZE, model_name=PAGE_MODEL, max_tokens=MAX_TOKENS, multiagent=USE_MULTIAGENT)
+    content_list, image_files = generate_lecture_from_images_openai(client, merged_image_dir, get_each_page_prompt(COMPLEXITY),
+                                                                     context_size=TEXT_GENERATING_CONTEXT_SIZE, model_name=PAGE_MODEL, 
+                                                                     max_tokens=MAX_TOKENS, multiagent=USE_MULTIAGENT)
 
     # save each content into a separate file
     for i, content in enumerate(content_list):
