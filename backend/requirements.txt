@@ -22,3 +22,4 @@ cryptography
 bcrypt==4.0.1
 aiofiles
 jose
+pydantic[email]
