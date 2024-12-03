@@ -21,6 +21,7 @@ const Display = () => {
   const navigate = useNavigate();
   const [metadata, setMetadata] = useState<Metadata | null>(null);
   const [loading, setLoading] = useState(true);
+  const [currentSlide, setCurrentSlide] = useState(0);
 
   useEffect(() => {
     const fetchMetadata = async () => {
@@ -87,12 +88,10 @@ const Display = () => {
           pdfId={pdfId!}
           audioTimestamps={metadata.audio_timestamps || []}
           timestamp={metadata.original_filename}
+          currentSlide={currentSlide}
+          setCurrentSlide={setCurrentSlide}
         />
-        <Transcript
-          pdfId={pdfId!}
-          audioTimestamps={metadata.audio_timestamps || []}
-          timestamp={metadata.original_filename}
-        />
+        <Transcript pdfId={pdfId!} currentSlide={currentSlide} />
       </div>
       <div className="chatbot-container">
         <Chatbot />

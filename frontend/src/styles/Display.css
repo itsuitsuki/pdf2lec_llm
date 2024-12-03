@@ -8,11 +8,12 @@
 }
 
 .main-content{
+  display: 2;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-content: center;
-  max-width: 50%;
+  max-width: 66%;
 }
 
 .chatbot-container {
@@ -22,7 +23,7 @@
 }
 
 .carousel-container {
-  padding: 8px;
+  padding-top: 20px;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -38,7 +39,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 45vw; /* Matches slide-viewer width */
+  width: 80%; /* Matches slide-viewer width */
   margin-bottom: 16px;
 }
 
@@ -54,7 +55,7 @@
   display: flex;
   justify-content: space-evenly;
   margin-bottom: 20px;
-  max-width: 50vw;
+  width: 80%;
 }
 
 .thumbnail-container.collapsed {
@@ -116,7 +117,7 @@
   flex: 1;
   overflow-x: auto; /* Allows horizontal scroll if content overflows */
   display: flex;
-  margin-top: 2%;
+  margin-top: 1%;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
   background-color: white;
   border-radius: 10px;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, ReactInstance } from "react";
 import * as pdfjs from "pdfjs-dist";
 import "pdfjs-dist/build/pdf.worker.entry";
 import "../styles/Display.css";
@@ -16,6 +16,8 @@ interface CarouselProps {
   pdfId: string;
   audioTimestamps: number[];
   timestamp: string;
+  currentSlide: number;
+  setCurrentSlide: (value: number) => void;
 }
 
 interface SlideViewerProps {
@@ -48,9 +50,10 @@ const Carousel: React.FC<CarouselProps> = ({
   pdfId,
   audioTimestamps,
   timestamp,
+  currentSlide,
+  setCurrentSlide,
 }) => {
   const [slides, setSlides] = useState<string[]>([]);
-  const [currentSlide, setCurrentSlide] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -150,7 +153,16 @@ const Carousel: React.FC<CarouselProps> = ({
   if (loading) {
     return (
       <div className="carousel-container">
-        <div style={{ display: "flex", flex: "1" }}>Loading slides...</div>
+        <div
+          style={{
+            display: "flex",
+            flex: "1",
+            alignContent: "center",
+            alignItems: "center",
+          }}
+        >
+          Loading slides...
+        </div>
       </div>
     );
   }
@@ -184,6 +196,8 @@ const Carousel: React.FC<CarouselProps> = ({
           display: "flex",
           flexDirection: "column",
           width: "90%",
+          alignContent: "center",
+          alignItems: "center",
         }}
       >
         <div
@@ -192,6 +206,9 @@ const Carousel: React.FC<CarouselProps> = ({
             display: "flex",
             flexDirection: "column",
             position: "relative",
+            alignContent: "center",
+            alignItems: "center",
+
           }}
         >
           <div
