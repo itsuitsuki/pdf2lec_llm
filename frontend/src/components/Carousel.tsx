@@ -195,7 +195,7 @@ const Carousel: React.FC<CarouselProps> = ({
         style={{
           display: "flex",
           flexDirection: "column",
-          width: "90%",
+          // width: "90%",
           alignContent: "center",
           alignItems: "center",
         }}
@@ -208,7 +208,6 @@ const Carousel: React.FC<CarouselProps> = ({
             position: "relative",
             alignContent: "center",
             alignItems: "center",
-
           }}
         >
           <div
