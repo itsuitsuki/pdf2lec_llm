@@ -715,6 +715,7 @@ def get_all_pdfs(file_type: str) -> list:
 @app.post("/api/v1/retrieve_filenames")
 async def retrieve_filenames(request: Request):
     logger = logging.getLogger("uvicorn")
+    logger.info("STARTING")
 
     data = await request.json()
     pdf_id = data.get("pdfId")
@@ -729,7 +730,7 @@ async def retrieve_filenames(request: Request):
             raise FileNotFoundError(f"The folder for {pdf_id} does not exist.")
         
         # List all files in the folder and filter for .txt files
-        txt_files = [f for f in os.listdir(folder_path) if f.endswith('.txt')]
+        txt_files = sorted([f for f in os.listdir(folder_path) if f.endswith('.txt')])
 
         # If there are no .txt files, raise an error
         if not txt_files:

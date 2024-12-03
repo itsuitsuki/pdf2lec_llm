@@ -18,18 +18,18 @@ const Transcript = ({ currentTime }: { currentTime: number }) => {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${localStorage.getItem("token")}`, 
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
             },
             body: JSON.stringify({ pdfId }), // Send pdfId in the request body
           }
         );
-        
 
         if (!response.ok) {
           throw new Error("Failed to fetch transcript files");
         }
 
         const data = await response.json();
+        console.log("FILENAMES", data);
         setFiles(data.files); // Assuming the response contains a 'files' array
       } catch (error) {
         console.error("Error fetching transcript files:", error);
