@@ -77,31 +77,20 @@ def pdf2lec(_args: LecGenerateArgs, task_id):
             "multiagent": _args.multiagent,
             "audio_timestamps": []
         }
-
-
-        # save the metadata to a json file (save later)
-        # with open(metadata_file, 'w', encoding='utf-8') as f:
-        #     json.dump(METADATA, f, ensure_ascii=False, indent=4)
         client = OpenAI(api_key=_args.openai_api_key)
 
         logger.debug(f"Task {task_id}: Starting with configuration: {json.dumps(METADATA, indent=2)}")
 
         logger.info(f"Task {task_id}: Lecture Text Generation")
-        # generated_lecture_dir = f"./data/generated_texts/{TEST_PDF_NAME}"
-        # audio_dir = f"./data/generated_audios/{TEST_PDF_NAME}"
-        # image_dir = f"./data/images/{TEST_PDF_NAME}"
-        # merged_image_dir = f"./data/merged_images/{TEST_PDF_NAME}"
         pdf_id = _args.pdf_name
         base_dir = f"./data/{pdf_id}"
         
-        # 从 metadata.json 获取原始文件名和教科书信息
         with open(f"{base_dir}/metadata.json", "r") as f:
             metadata = json.load(f)
         
         original_filename = metadata.get('original_filename')
         PDF_PATH = f"{base_dir}/{original_filename}"
-        
-        # 更新目录路径
+
         generated_lecture_dir = f"{base_dir}/generated_texts"
         audio_dir = f"{base_dir}/generated_audios"
         image_dir = f"{base_dir}/images"
