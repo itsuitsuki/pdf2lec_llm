@@ -80,6 +80,7 @@ def pdf2lec(_args: LecGenerateArgs, task_id):
         client = OpenAI(api_key=_args.openai_api_key)
 
         logger.debug(f"Task {task_id}: Starting with configuration: {json.dumps(METADATA, indent=2)}")
+        
 
         logger.info(f"Task {task_id}: Lecture Text Generation")
         pdf_id = _args.pdf_name

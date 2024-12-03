@@ -8,4 +8,8 @@
   outline: none;
   list-style: none;
   font-family: 'Poppins', sans-serif;
+
+}
+html, body {
+  overflow-x: hidden; /* Disable horizontal scrolling */
 }

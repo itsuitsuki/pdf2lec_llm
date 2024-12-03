@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect } from "react";
 
 interface AuthContextType {
   user: {
@@ -15,12 +15,14 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<AuthContextType['user']>(null);
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const [user, setUser] = useState<AuthContextType["user"]>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem("token");
     if (token) {
       // Validate token and get user info
       fetchUserInfo(token);
@@ -29,10 +31,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchUserInfo = async (token: string) => {
     try {
-      const response = await fetch('http://localhost:5000/api/v1/me', {
+      const response = await fetch("http://localhost:8000/api/v1/me", {
         headers: {
-          'Authorization': `Bearer ${token}`
-        }
+          Authorization: `Bearer ${token}`,
+        },
       });
       if (response.ok) {
         const userData = await response.json();
@@ -52,7 +54,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
+    localStorage.removeItem("token");
     setUser(null);
     setIsAuthenticated(false);
   };
@@ -62,13 +64,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      login, 
-      logout, 
-      isAuthenticated,
-      hasAccessToPdf 
-    }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        login,
+        logout,
+        isAuthenticated,
+        hasAccessToPdf,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
@@ -77,7 +81,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };

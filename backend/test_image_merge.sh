@@ -16,7 +16,7 @@ fi
 
 # Make the API call
 echo "Testing image merge with file: $PDF_PATH"
-curl -X POST http://localhost:5000/api/v1/test_image_merge \
+curl -X POST http://localhost:8000/api/v1/test_image_merge \
   -H "Content-Type: multipart/form-data" \
   -F "file=@$PDF_PATH"
 

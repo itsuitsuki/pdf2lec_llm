@@ -1,6 +1,6 @@
 REDIS_PORT=6380
 CONTAINER_NAME=redis-llm
-MAIN_PORT=5000
+MAIN_PORT=8000
 # REMOVE_PREVIOUS=1
 
 # if [ $REMOVE_PREVIOUS -eq 1 ]; then
@@ -8,8 +8,17 @@ MAIN_PORT=5000
 #     docker rm $CONTAINER_NAME
 # fi
 
-if [ $(sysctl -n vm.overcommit_memory) -ne 1 ]; then
-    sudo sysctl -w vm.overcommit_memory=1
+# if [ $(sysctl -n vm.overcommit_memory) -ne 1 ]; then
+#     sudo sysctl -w vm.overcommit_memory=1
+# fi
+
+# support for mac os
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    if [ $(sysctl -n vm.overcommit_memory) -ne 1 ]; then
+        sudo sysctl -w vm.overcommit_memory=1
+    fi
+else
+    echo "Skipping vm.overcommit_memory setting: not supported on macOS."
 fi
 
 # first let the redis down
