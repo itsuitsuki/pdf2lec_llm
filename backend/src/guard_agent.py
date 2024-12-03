@@ -130,8 +130,8 @@ def analyze_slides_with_guard_agent(
         if json_match:
             json_str = json_match.group(1)
         else:
-            # 如果没有markdown代码块，尝试直接匹配JSON对象
-            json_match = re.search(r'\{(?:[^{}]|(?R))*\}', json_result)
+            # 如果没有markdown代码块，尝试直接匹配最外层的花括号内容
+            json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', json_result)
             if json_match:
                 json_str = json_match.group(0)
             else:
