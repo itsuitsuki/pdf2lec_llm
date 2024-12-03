@@ -32,6 +32,10 @@ export interface GenerateOptions {
 export interface Metadata {
     timestamp: string;
     audio_timestamps: number[];
-    status: 'pending' | 'generating' | 'completed' | 'failed';
+    status: 'pending' | 'generating' | 'completed' | 'failed' | 'non_lecture_pdf_error';
     original_filename: string;
+    validation?: {
+        reasoning?: string;
+    };
+    upload_time?: string;
 }

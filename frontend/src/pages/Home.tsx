@@ -49,6 +49,8 @@ const StatusIndicator: React.FC<{ status: string }> = ({ status }) => {
         return '⚪ Not Started';
       case 'failed':
         return '❌ Failed';
+      case 'non_lecture_pdf_error':
+        return '❌ Non-Lecture PDF';
       default:
         return 'Unknown Error';
     }
@@ -123,8 +125,14 @@ const Home = () => {
       const response = await pdfAPI.getPDFs('slide');
       console.log('🟢 Slides loaded successfully:', response.data);
       if (response.data) {
-        setSlides(response.data);
-        console.log('🟢 Slides state updated:', response.data);
+        // 按上传时间排序，最新的在前
+        const sortedSlides = response.data.sort((a, b) => {
+          const timeA = new Date(a.metadata?.upload_time || 0).getTime();
+          const timeB = new Date(b.metadata?.upload_time || 0).getTime();
+          return timeB - timeA;  // 降序排列
+        });
+        setSlides(sortedSlides);
+        console.log('🟢 Slides state updated:', sortedSlides);
       }
     } catch (error) {
       console.error('🔴 Failed to fetch slides:', error);
@@ -196,6 +204,13 @@ const Home = () => {
         break;
       case 'generating':
         alert('This lecture is currently being generated. Please wait for it to complete.');
+        break;
+      case 'non_lecture_pdf_error':
+        navigate('/error', { 
+          state: { 
+            reasoning: pdf.metadata?.validation?.reasoning || 'Unknown error occurred'
+          }
+        });
         break;
       case 'failed':
         alert('Generation failed. Please try upload another PDF');

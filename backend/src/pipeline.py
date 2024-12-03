@@ -15,7 +15,25 @@ from concurrent.futures import ThreadPoolExecutor
 import threading
 from src.arg_models import LecGenerateArgs
 # from src.logger import CustomLogger
+from src.guard_agent import validate_course_material
 
+def deep_merge_dict(dict1: dict, dict2: dict) -> dict:
+    """
+    recursively merge two dictionaries
+    """
+    merged = dict1.copy()
+    
+    for key, value in dict2.items():
+        if (
+            key in merged 
+            and isinstance(merged[key], dict) 
+            and isinstance(value, dict)
+        ):
+            merged[key] = deep_merge_dict(merged[key], value)
+        else:
+            merged[key] = value
+            
+    return merged
 
 def pdf2lec(_args: LecGenerateArgs, task_id):
     is_successful = False
@@ -94,9 +112,9 @@ def pdf2lec(_args: LecGenerateArgs, task_id):
         with open(metadata_file, "r") as f:
             metadata = json.load(f)
         
-        # 更新METADATA
-        METADATA.update(metadata)
-        METADATA.update({
+        # 使用深度合并更新METADATA
+        METADATA = deep_merge_dict(METADATA, metadata)
+        METADATA = deep_merge_dict(METADATA, {
             "timestamp": TIMESTAMP,
             "similarity_threshold": SIMILARITY_THRESHOLD_TO_MERGE,
         })
@@ -121,7 +139,26 @@ def pdf2lec(_args: LecGenerateArgs, task_id):
             Path(generated_lecture_dir).mkdir(parents=True, exist_ok=True)
             Path(f"{generated_lecture_dir}/lecture").mkdir(parents=True, exist_ok=True)
 
+            # Convert PDF to images
             convert_pdf_to_images(PDF_PATH, image_dir)
+            
+            # Validate course material using Guard Agent
+            logger.info(f"Task {task_id}: Validating course material")
+            validation_result = validate_course_material(client, image_dir)
+            
+            # Update metadata with validation result
+            METADATA.update({
+                "validation": validation_result
+            })
+            
+            # If not a valid course material, set status and return metadata
+            if not validation_result.get("is_course_material", False):
+                METADATA["status"] = "non_lecture_pdf_error"
+                with open(metadata_file, 'w', encoding='utf-8') as f:
+                    json.dump(METADATA, f, ensure_ascii=False, indent=4)
+                return METADATA  # Return metadata instead of raising exception
+            
+            # Continue with normal processing if it is a valid course material
             merge_similar_images(image_dir, merged_image_dir,
                                 similarity_threshold=SIMILARITY_THRESHOLD_TO_MERGE)
 
@@ -341,17 +378,18 @@ def pdf2lec(_args: LecGenerateArgs, task_id):
         if is_successful:
             logger.info(f"Task {task_id} finished.")
         else:
-            # 只需要删除生成的子目录，保留原始文件和 metadata
-            cleanup_paths = [
-                f"{base_dir}/generated_texts",
-                f"{base_dir}/generated_audios",
-                f"{base_dir}/images",
-                f"{base_dir}/merged_images"
-            ]
-            for cleanup_path in cleanup_paths:
-                if Path(cleanup_path).exists():
-                    shutil.rmtree(cleanup_path)
-            logger.error(f"Task {task_id}: Generated files have been removed due to failure or interruption.")
+            # Only cleanup if it's not a non_lecture_pdf_error
+            if METADATA.get("status") != "non_lecture_pdf_error":
+                cleanup_paths = [
+                    f"{base_dir}/generated_texts",
+                    f"{base_dir}/generated_audios",
+                    f"{base_dir}/images",
+                    f"{base_dir}/merged_images"
+                ]
+                for cleanup_path in cleanup_paths:
+                    if Path(cleanup_path).exists():
+                        shutil.rmtree(cleanup_path)
+                logger.error(f"Task {task_id}: Generated files have been removed due to failure or interruption.")
             
 
 # if __name__ == "__main__":

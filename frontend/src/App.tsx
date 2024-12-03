@@ -6,6 +6,7 @@ import Register from './pages/Register';
 import Display from './pages/Display';
 import ConfigurePage from './pages/ConfigurePage';
 import { useAuth } from './contexts/AuthContext';
+import ErrorPage from './pages/ErrorPage';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated } = useAuth();
@@ -34,6 +35,7 @@ function App() {
               <Display />
             </ProtectedRoute>
           } />
+          <Route path="/error" element={<ErrorPage />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

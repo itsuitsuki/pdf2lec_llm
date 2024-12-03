@@ -563,7 +563,7 @@ async def upload_slide(
         if 'accessible_pdfs' not in user:
             user['accessible_pdfs'] = []
         user['accessible_pdfs'].append(unique_id)
-        user_dal.update_user(current_user, user)  # 更新用户数据
+        user_dal.update_user(current_user, user)
         
         return {
             "id": unique_id,
@@ -822,7 +822,81 @@ async def test_image_merge(file: UploadFile = File(...)):
         logger.error(f"Error in test_image_merge: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
+@app.post("/api/v1/test_guard_agent")
+async def test_guard_agent(file: UploadFile = File(...)):
+    """Test endpoint for Guard Agent detection only"""
+    logger = logging.getLogger("uvicorn")
+    try:
+        # Validate and save the file
+        FileValidator.validate(file, "slide")
+        sanitized_filename = FileValidator.sanitize_filename(file.filename)
+        
+        # Create unique timestamp directory
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        unique_id = f"test_{timestamp}_{uuid.uuid4().hex[:8]}"
+        base_dir = f"./data/{unique_id}"
+        
+        # Create directory structure
+        os.makedirs(base_dir, exist_ok=True)
+        os.makedirs(f"{base_dir}/images", exist_ok=True)
+        os.makedirs(f"{base_dir}/merged_images", exist_ok=True)
+        
+        # Save PDF file
+        pdf_path = os.path.join(base_dir, sanitized_filename)
+        with open(pdf_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        # Create metadata
+        metadata = {
+            "original_filename": sanitized_filename,
+            "upload_time": datetime.datetime.now().isoformat(),
+            "status": "pending"
+        }
+        
+        with open(os.path.join(base_dir, "metadata.json"), "w") as f:
+            json.dump(metadata, f)
+        
+        # Process images and test Guard Agent
+        convert_pdf_to_images(pdf_path, f"{base_dir}/images")
+        merge_similar_images(f"{base_dir}/images", f"{base_dir}/merged_images", 
+                           similarity_threshold=0.4)
+        
+        # Get representative slides and analyze with Guard Agent
+        representative_slides = get_representative_slides(f"{base_dir}/merged_images")
+        client = OpenAI()
+        is_valid, guard_metadata = analyze_slides_with_guard_agent(
+            client, 
+            representative_slides,
+            model_name="gpt-4-vision-preview"
+        )
+        
+        # Update metadata with results
+        metadata.update({
+            "status": "completed",
+            "is_course_material": is_valid,
+            "guard_agent_results": guard_metadata
+        })
+        
+        with open(os.path.join(base_dir, "metadata.json"), "w") as f:
+            json.dump(metadata, f, indent=2)
+            
+        # Clean up temporary files
+        shutil.rmtree(base_dir)
+        
+        return JSONResponse(
+            content={
+                "is_course_material": is_valid,
+                "analysis": guard_metadata
+            },
+            status_code=200
+        )
+        
+    except Exception as e:
+        logger.error(f"Guard Agent test failed: {str(e)}")
+        # Clean up in case of error
+        if os.path.exists(base_dir):
+            shutil.rmtree(base_dir)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/v1/register")
 async def register(user: UserCreate):

@@ -22,7 +22,7 @@ const Login = () => {
 
       if (response.ok) {
         const data = await response.json();
-        login(data.access_token);
+        await login(data.access_token);
         navigate('/');
       } else {
         alert('Login failed');
