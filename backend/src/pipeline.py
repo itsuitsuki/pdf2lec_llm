@@ -64,9 +64,12 @@ def pdf2lec(_args: LecGenerateArgs, task_id):
         # save the metadata to a json file (save later)
         # with open(metadata_file, 'w', encoding='utf-8') as f:
         #     json.dump(METADATA, f, ensure_ascii=False, indent=4)
+        logger.info(f"Task {task_id}: openai key: {os.environ['OPENAI_API_KEY']}")
+        logger.info(f"Task {task_id}: openai key: {_args.openai_api_key}")
         client = OpenAI(api_key=_args.openai_api_key)
 
         logger.debug(f"Task {task_id}: Starting with configuration: {json.dumps(METADATA, indent=2)}")
+        
 
         logger.info(f"Task {task_id}: Lecture Text Generation")
         # generated_lecture_dir = f"./data/generated_texts/{TEST_PDF_NAME}"

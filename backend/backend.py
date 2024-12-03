@@ -37,9 +37,13 @@ from utils.auth import SECRET_KEY, ALGORITHM
 from starlette.responses import Response
 from starlette.types import Scope, Receive, Send
 from dal.user_dal import UserDAL
+from dotenv import load_dotenv
 
 
 # create a Redis client and FastAPI app
+load_dotenv(override=True)
+print(f"OPENAI_API_KEY from .env: {os.getenv('OPENAI_API_KEY')}")
+
 redis_client = None
 qa_redis_client = None
 app = FastAPI()
@@ -55,7 +59,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 class AuthenticatedStaticFiles(StaticFiles):
     async def __call__(self, scope, receive, send):
         # 从 scope 中获取请求路径
@@ -108,6 +111,7 @@ def generate_content_sync(task_id: str, lec_args: LecGenerateArgs):
     try:
         logger = logging.getLogger("uvicorn")
         logger.info(f"Starting new task with ID: {task_id}")
+        logger.info(f"THiS I S THE KEY: {os.environ['OPENAI_API_KEY']}")
         
         # 如果使用教科书，确保从metadata中获取正确的文件名
         if lec_args.use_rag and lec_args.textbook_name:
@@ -707,6 +711,37 @@ def get_all_pdfs(file_type: str) -> list:
 
     return pdfs
 
+
+@app.post("/api/v1/retrieve_filenames")
+async def retrieve_filenames(request: Request):
+    logger = logging.getLogger("uvicorn")
+
+    data = await request.json()
+    pdf_id = data.get("pdfId")
+    logger.info(f"Retrieving filenames for pdf: {pdf_id}")
+
+    # Construct the path to the pdfId's folder (assuming it's inside generated_texts)
+    folder_path = f"./data/{pdf_id}/generated_texts/lecture"
+
+    try:
+        # Check if the folder exists
+        if not os.path.exists(folder_path):
+            raise FileNotFoundError(f"The folder for {pdf_id} does not exist.")
+        
+        # List all files in the folder and filter for .txt files
+        txt_files = [f for f in os.listdir(folder_path) if f.endswith('.txt')]
+
+        # If there are no .txt files, raise an error
+        if not txt_files:
+            raise FileNotFoundError("No .txt files found in the specified directory.")
+        
+        return {"files": txt_files}
+
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to fetch .txt files from the server.")
+    
 @app.post("/api/v1/chatbot")
 async def chatbot(request: Request):
     logger = logging.getLogger("uvicorn")
@@ -882,7 +917,7 @@ def init_user_dal(redis_port):
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=5000, help="The port to run the server.")
+    parser.add_argument("--port", type=int, default=8000, help="The port to run the server.")
     parser.add_argument("--redis_port", type=int, default=6379, help="The port of the Redis server, should be referenced from the config.")
     parser.add_argument("--n_workers", type=int, default=4, help="The number of thread workers to use.")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging", default=False)

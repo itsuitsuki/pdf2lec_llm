@@ -8,9 +8,9 @@ import {
   faChevronDown,
   faChevronUp,
 } from "@fortawesome/free-solid-svg-icons";
-import Transcript from "./Transcript";
 import { getAuthHeaders } from "../utils/auth";
 import { getAudioBlob } from "../utils/audio";
+import { time } from "console";
 
 interface CarouselProps {
   pdfId: string;
@@ -44,32 +44,36 @@ const SlideViewer: React.FC<SlideViewerProps> = ({ slides, currentSlide }) => {
   );
 };
 
-const Carousel: React.FC<CarouselProps> = ({ pdfId, audioTimestamps, timestamp }) => {
+const Carousel: React.FC<CarouselProps> = ({
+  pdfId,
+  audioTimestamps,
+  timestamp,
+}) => {
   const [slides, setSlides] = useState<string[]>([]);
   const [currentSlide, setCurrentSlide] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [audioUrl, setAudioUrl] = useState<string>('');
-  const baseAudioUrl = `http://localhost:5000/data/${pdfId}/generated_audios/combined.mp3`;
+  const [audioUrl, setAudioUrl] = useState<string>("");
+  const baseAudioUrl = `http://localhost:8000/data/${pdfId}/generated_audios/combined.mp3`;
 
   // 修改 URL 构建方式，添加认证头
   const headers = getAuthHeaders();
-  const pdfUrl = `http://localhost:5000/data/${pdfId}/${timestamp}`;
+  const pdfUrl = `http://localhost:8000/data/${pdfId}/${timestamp}`;
 
   useEffect(() => {
     const loadPdf = async () => {
       try {
-        console.log('Loading PDF from URL:', pdfUrl);
-        const token = localStorage.getItem('token');
+        console.log("Loading PDF from URL:", pdfUrl);
+        const token = localStorage.getItem("token");
         const loadingTask = pdfjs.getDocument({
           url: pdfUrl,
           httpHeaders: {
-            'Authorization': `Bearer ${token}`
-          }
+            Authorization: `Bearer ${token}`,
+          },
         });
         const pdf = await loadingTask.promise;
-        console.log('PDF loaded successfully, pages:', pdf.numPages);
+        console.log("PDF loaded successfully, pages:", pdf.numPages);
         const slideImages: string[] = [];
 
         for (let i = 1; i <= pdf.numPages; i++) {
@@ -86,8 +90,8 @@ const Carousel: React.FC<CarouselProps> = ({ pdfId, audioTimestamps, timestamp }
 
         setSlides(slideImages);
       } catch (error) {
-        console.error('Error loading PDF:', error);
-        console.error('PDF URL was:', pdfUrl);
+        console.error("Error loading PDF:", error);
+        console.error("PDF URL was:", pdfUrl);
       } finally {
         setLoading(false);
       }
@@ -102,12 +106,12 @@ const Carousel: React.FC<CarouselProps> = ({ pdfId, audioTimestamps, timestamp }
         const url = await getAudioBlob(baseAudioUrl);
         setAudioUrl(url);
       } catch (error) {
-        console.error('Error loading audio:', error);
+        console.error("Error loading audio:", error);
       }
     };
-    
+
     loadAudio();
-    
+
     return () => {
       // Clean up object URL when component unmounts
       if (audioUrl) {
@@ -122,11 +126,14 @@ const Carousel: React.FC<CarouselProps> = ({ pdfId, audioTimestamps, timestamp }
 
     const handleTimeUpdate = () => {
       const currentTime = audioElement.currentTime * 1000; // 转换为毫秒
-      
+
       // 根据时间戳确定当前应该显示的幻灯片
       const newSlideIndex = audioTimestamps.findIndex((timestamp, index) => {
         const nextTimestamp = audioTimestamps[index + 1];
-        return currentTime >= timestamp && (!nextTimestamp || currentTime < nextTimestamp);
+        return (
+          currentTime >= timestamp &&
+          (!nextTimestamp || currentTime < nextTimestamp)
+        );
       });
 
       if (newSlideIndex !== -1 && newSlideIndex !== currentSlide) {
@@ -141,7 +148,11 @@ const Carousel: React.FC<CarouselProps> = ({ pdfId, audioTimestamps, timestamp }
   }, [currentSlide, slides, audioTimestamps]);
 
   if (loading) {
-    return <div>Loading slides...</div>;
+    return (
+      <div className="carousel-container">
+        <div style={{ display: "flex", flex: "1" }}>Loading slides...</div>
+      </div>
+    );
   }
 
   const handleThumbnailClick = (index: number) => {
@@ -168,7 +179,13 @@ const Carousel: React.FC<CarouselProps> = ({ pdfId, audioTimestamps, timestamp }
           Your browser does not support the audio element.
         </audio>
       </div>
-      <div style={{display:"flex", flexDirection:"column", width:"90%", flexGrow:"1"}}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          width: "90%",
+        }}
+      >
         <div
           className="collapsed-hover-container"
           style={{
@@ -217,9 +234,7 @@ const Carousel: React.FC<CarouselProps> = ({ pdfId, audioTimestamps, timestamp }
               <FontAwesomeIcon icon={faFilePdf} />
             </div>
           </button>
-          
         </div>
-        <Transcript />
       </div>
     </div>
   );

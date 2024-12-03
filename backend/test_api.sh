@@ -15,7 +15,7 @@
 #     textbook_name: str = Field(None, description="The name of the textbook PDF file. Must be provided if use_rag is True.")
 #     openai_api_key: str = Field(None, description="OpenAI API key. If not provided, the API key from the environment variable OPENAI_API_KEY will be used.")
 
-curl -X POST http://localhost:5000/api/v1/lec_generate \
+curl -X POST http://localhost:8000/api/v1/lec_generate \
 -H "Content-Type: application/json" \
 -d '{
     "similarity_threshold": 0.4,
@@ -33,7 +33,7 @@ curl -X POST http://localhost:5000/api/v1/lec_generate \
     "openai_api_key": null
 }'
 
-# curl -X POST "http://localhost:5000/api/v1/ask_question" \
+# curl -X POST "http://localhost:8000/api/v1/ask_question" \
 # -H "Content-Type: application/json" \
 # -d '{
 #     "question": "What is a posterior probability?",

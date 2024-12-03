@@ -1,29 +1,36 @@
 .display-container {
   padding: 32px 0px;
-}
-
-.grid-container {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr); /* 3 equal columns */
-  grid-template-rows: repeat(3, 1fr); /* 3 equal rows */
-}
-
-.grid-item {
   display: flex;
+  width: 100%;
+  height: 100vh;
+  margin-left: 5%;
+  margin-right: 5%;
+}
+
+.main-content{
+  display: flex;
+  flex-direction: column;
   justify-content: center;
-  align-items: center;
-  background-color: #f0f0f0;
-  border: 1px solid #ddd;
-  height: 100px; /* Adjust the height of each grid item */
-  text-align: center;
+  align-content: center;
+  max-width: 50%;
+}
+
+.chatbot-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .carousel-container {
-  width: 50vw;
-  height: 100vh;
+  padding: 8px;
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
+  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+  background-color: white;
+  border-radius: 10px;
+  z-index: 1000;
 }
 
 .hover-container {
@@ -51,9 +58,11 @@
 }
 
 .thumbnail-container.collapsed {
-  height: 0; /* Collapse height */
-  opacity: 0; 
+  height: 0; 
+  opacity: 0;
   overflow: hidden;
+  margin-bottom: 0;
+
 }
 
 .thumbnail-container img {
@@ -63,7 +72,7 @@
 }
 
 .collapsed-hover-container:hover .centered-button {
-    opacity: 1;
+  opacity: 1;
 }
 
 .centered-button {
@@ -72,12 +81,12 @@
   left: 50%; /* Horizontally center */
   transform: translate(-50%, -50%); /* Adjust for the exact center */
   padding: 8px 20px;
-  background-color: rgb(97, 97, 97); /* Example background color */
+  background-color: rgb(97, 97, 97); 
   color: white;
   border: none;
   border-radius: 20px;
   cursor: pointer;
-  z-index: 10; /* Ensure the button is above the thumbnails */
+  z-index: 10; 
   opacity: 0;
   transition: opacity 0.3s;
 }
@@ -104,9 +113,16 @@
 }
 
 .transcript-container {
-  flex-grow: 1;
-  background-color: #f0f0f0; /* Example styling */
+  flex: 1;
+  overflow-x: auto; /* Allows horizontal scroll if content overflows */
   display: flex;
-  justify-content: center;
-  align-items: center;
+  margin-top: 2%;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  background-color: white;
+  border-radius: 10px;
+  z-index: 1000;
+  padding: 20px;
+  word-wrap: break-word; /* Ensure long words break and wrap */
+  white-space: normal;  /* Allow text to wrap to the next line */
 }
+
