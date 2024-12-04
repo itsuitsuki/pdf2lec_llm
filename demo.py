@@ -10,14 +10,14 @@ SIMILARITY_THRESHOLD_TO_MERGE = 0.4
 TEXT_GENERATING_CONTEXT_SIZE = 2
 MAX_TOKENS = 1000
 
-TEST_PDF_NAME = "AI_Ethics_default_11pages"
+TEST_PDF_NAME = "L23-MDP-11-14"
 PDF_PATH = f"./test/{TEST_PDF_NAME}.pdf"
 
 PAGE_MODEL = "gpt-4o"
 SUMMARIZATION_MODEL = "gpt-4o-mini"
 TTS_MODEL = "tts-1"
 TTS_VOICE = "alloy"
-COMPLEXITY = 2 # 1=brief, 2=default, 3=detailed
+COMPLEXITY = 3 # 1=brief, 2=default, 3=detailed
 
 # NOTE: if True, regenerate the lecture content and summary regardless of whether the files already exist
 DO_REGENERATE = True

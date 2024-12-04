@@ -5,6 +5,7 @@ __pycache__/
 
 # data
 data/
+test/
 
 # API keys or secret configuration files (added by Lucy) 
 *.env
