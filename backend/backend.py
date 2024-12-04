@@ -1,6 +1,6 @@
 import os
 os.environ["TQDM_DISABLE"] = "1"
-from fastapi import FastAPI, HTTPException, Request, UploadFile, File
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Depends
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from src.arg_models import LecGenerateArgs, PDFSplitMergeArgs
@@ -27,14 +27,30 @@ from mimetypes import guess_type
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
+from models.user import UserCreate, UserLogin, Token
+from utils.auth import get_password_hash, verify_password, create_access_token, get_current_user
+import aiofiles
+from fastapi.responses import FileResponse
+from fastapi import Request
+from jose import JWTError, jwt
+from utils.auth import SECRET_KEY, ALGORITHM
+from starlette.responses import Response
+from starlette.types import Scope, Receive, Send
+from dal.user_dal import UserDAL
+from dotenv import load_dotenv
+
 
 # create a Redis client and FastAPI app
+load_dotenv(override=True)
+print(f"OPENAI_API_KEY from .env: {os.getenv('OPENAI_API_KEY')}")
+
 redis_client = None
 qa_redis_client = None
 app = FastAPI()
 n_workers = 4
 executor = ThreadPoolExecutor(max_workers=n_workers - n_workers // 2)
 qa_executor = ThreadPoolExecutor(max_workers=n_workers // 2)
+user_dal = None
 
 app.add_middleware(
     CORSMiddleware,
@@ -43,8 +59,42 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+class AuthenticatedStaticFiles(StaticFiles):
+    async def __call__(self, scope, receive, send):
+        # 从 scope 中获取请求路径
+        path = scope.get("path", "")
+        
+        # 验证 token
+        try:
+            auth_header = next((h[1].decode() for h in scope.get("headers", []) if h[0].decode() == "authorization"), None)
+            if not auth_header or not auth_header.startswith("Bearer "):
+                response = Response(status_code=401, content="Authorization header missing or invalid")
+                return await response(scope, receive, send)
+            
+            token = auth_header.split(" ")[1]
+            email = await get_current_user(token)
+            
+            # 从路径中提取 PDF ID
+            path_parts = path.split("/")
+            if len(path_parts) > 2:
+                pdf_id = path_parts[2]  # 获取路径中的 PDF ID
+                
+                user = user_dal.get_user(email)
+                if not user or pdf_id not in user.get('accessible_pdfs', []):
+                    response = Response(status_code=403, content="Access denied")
+                    return await response(scope, receive, send)
+            
+        except HTTPException as e:
+            response = Response(status_code=e.status_code, content=str(e.detail))
+            return await response(scope, receive, send)
+        except Exception as e:
+            response = Response(status_code=500, content=str(e))
+            return await response(scope, receive, send)
+        
+        return await super().__call__(scope, receive, send)
 
-app.mount("/data", StaticFiles(directory="data"), name="data")
+# 使用自定义的认证静态文件中间件
+app.mount("/data", AuthenticatedStaticFiles(directory="data"), name="data")
 
 @app.exception_handler(ValidationError)
 async def validation_exception_handler(request: Request, exc: ValidationError):
@@ -61,6 +111,7 @@ def generate_content_sync(task_id: str, lec_args: LecGenerateArgs):
     try:
         logger = logging.getLogger("uvicorn")
         logger.info(f"Starting new task with ID: {task_id}")
+        logger.info(f"THiS I S THE KEY: {os.environ['OPENAI_API_KEY']}")
         
         # 如果使用教科书，确保从metadata中获取正确的文件名
         if lec_args.use_rag and lec_args.textbook_name:
@@ -107,7 +158,15 @@ async def lec_generate(lec_args: LecGenerateArgs):
     task_id = str(uuid.uuid4())
     logger.debug(f"Task {task_id}: lec_args: {lec_args}")
     # 将任务状态设置为 "pending"
-    redis_client.set(task_id, json.dumps({"status": "pending"}))
+    base_dir = f"./data/{lec_args.pdf_name}"
+    with open(f"{base_dir}/metadata.json", "r") as f:
+        metadata = json.load(f)
+    metadata["status"] = "generating"
+    with open(f"{base_dir}/metadata.json", "w") as f:
+        json.dump(metadata, f, indent=2)
+
+    # 将任务状态设置为 "generating"
+    redis_client.set(task_id, json.dumps({"status": "generating"}))
     
     # 添加后台任务
     # background_tasks.add_task(generate_content, task_id, lec_args)
@@ -265,8 +324,25 @@ async def clear_all_data():
     return {"message": "All data cleared."}
 
 def qa_sync(qa_args: QAArgs, qa_task_id: str):
+    # TODO: qa_args will use use_arg and textbook_name
     logger = logging.getLogger("uvicorn")
     logger.info(f"Task {qa_args.task_id}: Question asked: {qa_args.question}")
+    
+    if qa_args.use_rag and qa_args.textbook_name is None:
+        raise HTTPException(status_code=400, detail="textbook_name must be provided if use_rag is True.")
+    
+    if qa_args.use_rag and qa_args.textbook_name:
+        base_dir = f"./data/{qa_args.pdf_name}"
+        with open(f"{base_dir}/metadata.json", "r") as f:
+            metadata = json.load(f)
+        if not metadata.get("has_textbook"):
+            raise HTTPException(
+                status_code=400,
+                detail="No textbook found for this slide"
+            )
+        qa_args.textbook_name = metadata.get("textbook_filename")
+
+    
 
     task_data = redis_client.get(qa_args.task_id)
     if task_data is None:
@@ -293,6 +369,7 @@ def qa_sync(qa_args: QAArgs, qa_task_id: str):
     else:
         qa_context = None
     logger.info(f"Task {qa_args.task_id}: QA context loaded.")
+    base_dir = f"./data/{qa_args.pdf_name}"
     try:
         answer, qa_context_updated = single_gen_answer(qa_args, pdf_content, transcript, qa_context)
         # qa_context_updated: list of dict of {"role": "user" or "assistant", "content": str of question or answer}
@@ -449,57 +526,58 @@ def generate_unique_id():
     return f"{timestamp}_{random_suffix}"
 
 @app.post("/api/v1/upload-slide")
-async def upload_slide(file: UploadFile = File(...)):
-    """Upload slide PDF file"""
+async def upload_slide(
+    file: UploadFile = File(...),
+    current_user: str = Depends(get_current_user)
+):
     logger = logging.getLogger("uvicorn")
     try:
         FileValidator.validate(file, "slide")
-        unique_id = generate_unique_id()
         sanitized_filename = FileValidator.sanitize_filename(file.filename)
         
-        # 创建新的目录结构
+        # 生成唯一ID
+        unique_id = generate_unique_id()
+        
+        # 创建目录
         base_dir = f"./data/{unique_id}"
         os.makedirs(base_dir, exist_ok=True)
         
-        # 保存PDF文件
-        pdf_path = os.path.join(base_dir, f"Input_{sanitized_filename}")
-        with open(pdf_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        # 创建metadata.json
+        file_path = os.path.join(base_dir, f"{sanitized_filename}")
+        async with aiofiles.open(file_path, 'wb') as f:
+            content = await file.read()
+            await f.write(content)
+            
+        # 创建并保存元数据
         metadata = {
-            "id": unique_id,
-            "original_filename": sanitized_filename,
-            "type": "slide",
-            "timestamp": datetime.datetime.now().isoformat(),
-            "status": "pending"
+            "original_filename": f"{sanitized_filename}",
+            "upload_time": datetime.datetime.now().isoformat(),
+            "status": "pending",
+            "uploader": current_user,
+            "audio_timestamps": []
         }
         
-        with open(os.path.join(base_dir, "metadata.json"), "w") as f:
-            json.dump(metadata, f, indent=2)
-            
-        return JSONResponse(
-            content={
-                "id": unique_id,
-                "filename": sanitized_filename,
-                "path": f"/data/{unique_id}/Input_{sanitized_filename}",
-                "type": "slide",
-                "message": "File uploaded successfully"
-            },
-            status_code=200
-        )
-    except HTTPException as e:
-        logger.error(f"File validation failed: {str(e)}")
-        return JSONResponse(
-            content={"detail": str(e.detail)},
-            status_code=e.status_code
-        )
+        with open(os.path.join(base_dir, "metadata.json"), 'w') as f:
+            json.dump(metadata, f)
+        
+        # 将PDF ID添加到用户的可访问列表中
+        user = user_dal.get_user(current_user)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        if 'accessible_pdfs' not in user:
+            user['accessible_pdfs'] = []
+        user['accessible_pdfs'].append(unique_id)
+        user_dal.update_user(current_user, user)
+        
+        return {
+            "id": unique_id,
+            "filename": sanitized_filename,
+            "type": "slide",
+            "metadata": metadata
+        }
     except Exception as e:
-        logger.error(f"File upload failed: {str(e)}")
-        return JSONResponse(
-            content={"detail": str(e)},
-            status_code=500
-        )
+        logger.error(f"Upload failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/v1/upload-textbook/{slide_id}")
 async def upload_textbook(slide_id: str, file: UploadFile = File(...)):
@@ -519,14 +597,14 @@ async def upload_textbook(slide_id: str, file: UploadFile = File(...)):
             metadata = json.load(f)
             
         # 保存教科书文件
-        pdf_path = os.path.join(base_dir, f"Input_{sanitized_filename}")
+        pdf_path = os.path.join(base_dir, f"{sanitized_filename}")
         with open(pdf_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
         # 更新 metadata
         metadata.update({
             "textbook_filename": sanitized_filename,
-            "textbook_path": f"/data/{slide_id}/Input_{sanitized_filename}",
+            "textbook_path": f"/data/{slide_id}/{sanitized_filename}",
             "has_textbook": True,
             "updated_at": datetime.datetime.now().isoformat()
         })
@@ -539,7 +617,7 @@ async def upload_textbook(slide_id: str, file: UploadFile = File(...)):
             content={
                 "id": slide_id,
                 "filename": sanitized_filename,
-                "path": f"/data/{slide_id}/Input_{sanitized_filename}",
+                "path": f"/data/{slide_id}/{sanitized_filename}",
                 "type": "textbook",
                 "metadata": metadata
             },
@@ -552,41 +630,30 @@ async def upload_textbook(slide_id: str, file: UploadFile = File(...)):
         logger.error(f"File upload failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/v1/pdfs/{file_type}")
-async def get_pdfs(file_type: str) -> List[dict]:
-    """Get list of PDFs by type"""
+@app.get("/api/v1/pdfs/{type}")
+async def get_pdfs(type: str, current_user: str = Depends(get_current_user)):
+    """Get all PDFs of specified type"""
     logger = logging.getLogger("uvicorn")
     try:
-        if file_type not in ["slide", "textbook"]:
+        if type not in ["slide", "textbook"]:
             raise HTTPException(status_code=400, detail="Invalid file type")
-            
-        base_dir = "./data"
-        files = []
+
+        # 获取用户信息
+        user = user_dal.get_user(current_user)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # 获取用户可访问的PDF列表
+        accessible_pdfs = user.get('accessible_pdfs', [])
         
-        # 遍历所有任务目录
-        for dir_name in os.listdir(base_dir):
-            dir_path = os.path.join(base_dir, dir_name)
-            if not os.path.isdir(dir_path):
-                continue
-                
-            metadata_path = os.path.join(dir_path, "metadata.json")
-            if not os.path.exists(metadata_path):
-                continue
-                
-            with open(metadata_path, 'r') as f:
-                metadata = json.load(f)
-                
-            if metadata.get('type') == file_type:
-                files.append({
-                    "id": metadata['id'],
-                    "filename": f"Input_{metadata['original_filename']}",
-                    "path": f"/data/{dir_name}/Input_{metadata['original_filename']}",
-                    "type": file_type,
-                    "metadata": metadata
-                })
+        # 获取所有PDF并过滤
+        all_pdfs = get_all_pdfs(type)
+        filtered_pdfs = [
+            pdf for pdf in all_pdfs 
+            if pdf['id'] in accessible_pdfs
+        ]
         
-        logger.debug(f"Returning {len(files)} PDF files")
-        return files
+        return filtered_pdfs
     except Exception as e:
         logger.error(f"Error getting PDFs: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -610,21 +677,72 @@ async def delete_pdf(file_type: str, pdf_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/v1/pdfs")
-async def get_all_pdfs() -> dict:
-    """Get all PDFs grouped by type"""
-    logger = logging.getLogger("uvicorn")
-    try:
-        slides = await get_pdfs("slide")
-        textbooks = await get_pdfs("textbook")
-        
-        return {
-            "slides": slides,
-            "textbooks": textbooks
-        }
-    except Exception as e:
-        logger.error(f"File retrieval failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+def get_all_pdfs(file_type: str) -> list:
+    """
+    获取指定类型的所有PDF文件
+    :param file_type: 文件类型 ('slide' 或 'textbook')
+    :return: PDF文件列表
+    """
+    pdfs = []
+    data_dir = "./data"
+    
+    if not os.path.exists(data_dir):
+        return pdfs
 
+    for pdf_id in os.listdir(data_dir):
+        pdf_path = os.path.join(data_dir, pdf_id)
+        if not os.path.isdir(pdf_path):
+            continue
+
+        if file_type == "slide":
+            input_files = [f for f in os.listdir(pdf_path) if f.endswith(".pdf")]
+            if input_files:
+                metadata_file = os.path.join(pdf_path, "metadata.json")
+                metadata = {}
+                if os.path.exists(metadata_file):
+                    with open(metadata_file, 'r') as f:
+                        metadata = json.load(f)
+                
+                pdfs.append({
+                    "id": pdf_id,
+                    "filename": input_files[0],
+                    "metadata": metadata
+                })
+
+    return pdfs
+
+
+@app.post("/api/v1/retrieve_filenames")
+async def retrieve_filenames(request: Request):
+    logger = logging.getLogger("uvicorn")
+    logger.info("STARTING")
+
+    data = await request.json()
+    pdf_id = data.get("pdfId")
+    logger.info(f"Retrieving filenames for pdf: {pdf_id}")
+
+    # Construct the path to the pdfId's folder (assuming it's inside generated_texts)
+    folder_path = f"./data/{pdf_id}/generated_texts/lecture"
+
+    try:
+        # Check if the folder exists
+        if not os.path.exists(folder_path):
+            raise FileNotFoundError(f"The folder for {pdf_id} does not exist.")
+        
+        # List all files in the folder and filter for .txt files
+        txt_files = sorted([f for f in os.listdir(folder_path) if f.endswith('.txt')])
+
+        # If there are no .txt files, raise an error
+        if not txt_files:
+            raise FileNotFoundError("No .txt files found in the specified directory.")
+        
+        return {"files": txt_files}
+
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to fetch .txt files from the server.")
+    
 @app.post("/api/v1/chatbot")
 async def chatbot(request: Request):
     logger = logging.getLogger("uvicorn")
@@ -682,10 +800,199 @@ async def chatbot(request: Request):
             content={"reply": "Sorry, something went wrong. Please try again later."}
         )
 
+@app.post("/api/v1/test_image_merge")
+async def test_image_merge(file: UploadFile = File(...)):
+    """Test endpoint for image merging process only"""
+    logger = logging.getLogger("uvicorn")
+    try:
+        # Validate and save the file
+        FileValidator.validate(file, "slide")
+        sanitized_filename = FileValidator.sanitize_filename(file.filename)
+        
+        # Create unique timestamp directory
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        unique_id = f"test_{timestamp}_{uuid.uuid4().hex[:8]}"
+        base_dir = f"./data/{unique_id}"
+        
+        # Create directory structure
+        os.makedirs(base_dir, exist_ok=True)
+        os.makedirs(f"{base_dir}/images", exist_ok=True)
+        os.makedirs(f"{base_dir}/merged_images", exist_ok=True)
+        
+        # Save PDF file
+        pdf_path = os.path.join(base_dir, f"{sanitized_filename}")
+        with open(pdf_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # Create metadata
+        metadata = {
+            "id": unique_id,
+            "original_filename": sanitized_filename,
+            "type": "test_merge",
+            "timestamp": timestamp,
+            "status": "processing"
+        }
+        
+        with open(os.path.join(base_dir, "metadata.json"), "w") as f:
+            json.dump(metadata, f, indent=2)
+            
+        # Process images
+        convert_pdf_to_images(pdf_path, f"{base_dir}/images")
+        merge_similar_images(f"{base_dir}/images", f"{base_dir}/merged_images", 
+                           similarity_threshold=0.4)
+        
+        metadata["status"] = "completed"
+        with open(os.path.join(base_dir, "metadata.json"), "w") as f:
+            json.dump(metadata, f, indent=2)
+            
+        return JSONResponse(
+            content={
+                "id": unique_id,
+                "path": f"/data/{unique_id}",
+                "message": "Image processing completed successfully"
+            },
+            status_code=200
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in test_image_merge: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/test_guard_agent")
+async def test_guard_agent(file: UploadFile = File(...)):
+    """Test endpoint for Guard Agent detection only"""
+    logger = logging.getLogger("uvicorn")
+    try:
+        # Validate and save the file
+        FileValidator.validate(file, "slide")
+        sanitized_filename = FileValidator.sanitize_filename(file.filename)
+        
+        # Create unique timestamp directory
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        unique_id = f"test_{timestamp}_{uuid.uuid4().hex[:8]}"
+        base_dir = f"./data/{unique_id}"
+        
+        # Create directory structure
+        os.makedirs(base_dir, exist_ok=True)
+        os.makedirs(f"{base_dir}/images", exist_ok=True)
+        os.makedirs(f"{base_dir}/merged_images", exist_ok=True)
+        
+        # Save PDF file
+        pdf_path = os.path.join(base_dir, sanitized_filename)
+        with open(pdf_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        # Create metadata
+        metadata = {
+            "original_filename": sanitized_filename,
+            "upload_time": datetime.datetime.now().isoformat(),
+            "status": "pending"
+        }
+        
+        with open(os.path.join(base_dir, "metadata.json"), "w") as f:
+            json.dump(metadata, f)
+        
+        # Process images and test Guard Agent
+        convert_pdf_to_images(pdf_path, f"{base_dir}/images")
+        merge_similar_images(f"{base_dir}/images", f"{base_dir}/merged_images", 
+                           similarity_threshold=0.4)
+        
+        # Get representative slides and analyze with Guard Agent
+        representative_slides = get_representative_slides(f"{base_dir}/merged_images")
+        client = OpenAI()
+        is_valid, guard_metadata = analyze_slides_with_guard_agent(
+            client, 
+            representative_slides,
+            model_name="gpt-4-vision-preview"
+        )
+        
+        # Update metadata with results
+        metadata.update({
+            "status": "completed",
+            "is_course_material": is_valid,
+            "guard_agent_results": guard_metadata
+        })
+        
+        with open(os.path.join(base_dir, "metadata.json"), "w") as f:
+            json.dump(metadata, f, indent=2)
+            
+        # Clean up temporary files
+        shutil.rmtree(base_dir)
+        
+        return JSONResponse(
+            content={
+                "is_course_material": is_valid,
+                "analysis": guard_metadata
+            },
+            status_code=200
+        )
+        
+    except Exception as e:
+        logger.error(f"Guard Agent test failed: {str(e)}")
+        # Clean up in case of error
+        if os.path.exists(base_dir):
+            shutil.rmtree(base_dir)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/register")
+async def register(user: UserCreate):
+    if user_dal.get_user(user.email):
+        raise HTTPException(
+            status_code=400,
+            detail="Email already registered"
+        )
+    
+    hashed_password = get_password_hash(user.password)
+    user_dict = user.dict()
+    user_dict["id"] = str(uuid.uuid4())
+    user_dict["hashed_password"] = hashed_password
+    user_dict["accessible_pdfs"] = []
+    del user_dict["password"]
+    
+    if not user_dal.create_user(user_dict):
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to create user"
+        )
+    return {"message": "User created successfully"}
+
+@app.post("/api/v1/login")
+async def login(user_credentials: UserLogin):
+    user = user_dal.get_user(user_credentials.email)
+    if not user or not verify_password(user_credentials.password, user["hashed_password"]):
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect email or password"
+        )
+    access_token = create_access_token(data={"sub": user["email"]})
+    return Token(access_token=access_token)
+
+@app.get("/api/v1/me")
+async def read_users_me(current_user: str = Depends(get_current_user)):
+    user = user_dal.get_user(current_user)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {
+        "email": user["email"],
+        "username": user["username"],
+        "id": user["id"]
+    }
+
+def init_user_dal(redis_port):
+    """初始化用户 DAL"""
+    global user_dal
+    users_redis_client = redis.Redis(
+        host='localhost', 
+        port=redis_port, 
+        db=2,
+        decode_responses=True
+    )
+    user_dal = UserDAL(users_redis_client)
+
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=5000, help="The port to run the server.")
+    parser.add_argument("--port", type=int, default=8000, help="The port to run the server.")
     parser.add_argument("--redis_port", type=int, default=6379, help="The port of the Redis server, should be referenced from the config.")
     parser.add_argument("--n_workers", type=int, default=4, help="The number of thread workers to use.")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging", default=False)
@@ -715,5 +1022,7 @@ if __name__ == "__main__":
     atexit.register(clear_uncompleted_data_sync)
     atexit.register(main_redis_set_panding_to_failed)
     atexit.register(lambda: redis_client.close())
+    
+    init_user_dal(args.redis_port)
     
     uvicorn.run(app, host="0.0.0.0", port=args.port)

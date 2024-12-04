@@ -2,6 +2,13 @@ from utils.encode_image_to_base64 import encode_image_pil_to_base64
 from openai import OpenAI
 from src.arg_models import QAArgs
 from typing import Optional
+import logging
+import os
+from fastapi import HTTPException
+from src.faiss_textbook_indexer import FAISSTextbookIndexer
+from pathlib import Path
+# uvicorn logger
+logger = logging.getLogger("uvicorn")
 
 def single_gen_answer(qa_args: QAArgs, pdf_content: dict, transcript: str, past_qa_context: Optional[list[dict]] = None) -> tuple[str, list[dict]]:
     """Generate an answer using GPT-4 with both text, images, and summary context. Return the answer and the updated past QA context."""
@@ -30,6 +37,39 @@ def single_gen_answer(qa_args: QAArgs, pdf_content: dict, transcript: str, past_
                         })
     messages.append({"role": "user", "content": image_contents})
     
+    # FAISS
+    # FIXME: PDF_NAME IS NOT IN QA_ARGS, NOT WORKING
+    pdf_name = qa_args.pdf_name
+    base_dir = f"./data/{pdf_name}"
+    if qa_args.textbook_name and qa_args.use_rag:
+        textbook_path = os.path.join(base_dir, f"{qa_args.textbook_name}")
+        # logger.info(f"Task {qa_args.task_id}: Initializing textbook indexer")
+        logger.debug(f"Task {qa_args.task_id}: Textbook path: {textbook_path}")
+        if not os.path.exists(textbook_path):
+            raise HTTPException(status_code=404, detail=f"Textbook not found at {textbook_path}")
+        
+        faiss_textbook_indexer = FAISSTextbookIndexer(textbook_path)
+        index_path = Path(faiss_textbook_indexer.index_path) / Path(textbook_path).stem
+        # index_path = f"{faiss_textbook_indexer.index_path}/{os.path.splitext(textbook_path)[0]}"
+        logger.debug(f"Task {qa_args.task_id}: Index path: {index_path}")
+        # faiss_textbook_indexer.load_index(index_path)
+        if not os.path.exists(index_path):
+            logger.info(f"Task {qa_args.task_id}: Creating index")
+            faiss_textbook_indexer.create_index(index_path)
+        # faiss_textbook_indexer.create_index(index_path) 
+        if False:
+            query = " ".join([qa_args.question, transcript, pdf_content["text"]]) # FIXME: Maybe just use the question?
+        
+        query = " ".join([qa_args.question]) # FIXME: Maybe we should use all the context?
+        textbook_content = faiss_textbook_indexer.get_relevant_content(
+                query=query,
+                index_name=Path(faiss_textbook_indexer.textbook_path).stem
+            ) # List[str]
+        logger.debug(f"Task {qa_args.task_id}: Textbook content: {textbook_content}")
+        if textbook_content:
+            messages.append({"role": "user", "content": f"Relevant content in the textbook:\n{textbook_content}"})
+ 
+    # Other source context completed, now ask the question
     if past_qa_context:
         messages += past_qa_context
         past_qa_context.append({"role": "user", "content": f"Question: {qa_args.question}"})

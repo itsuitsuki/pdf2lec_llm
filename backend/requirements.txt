@@ -12,5 +12,14 @@ pymupdf==1.24.13
 tqdm==4.66.5
 uvicorn==0.32.0
 pillow
+redis
 python-multipart
 pypdf
+python-jose
+passlib==1.7.4
+python-dotenv
+cryptography
+bcrypt==4.0.1
+aiofiles
+jose
+pydantic[email]

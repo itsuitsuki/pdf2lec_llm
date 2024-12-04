@@ -4,6 +4,9 @@ import Carousel from "../components/Carousel";
 import "../styles/Display.css";
 import { pdfAPI } from "../api/pdf";
 import Chatbot from "../components/Chatbot";
+import { useAuth } from "../contexts/AuthContext";
+import { getAuthHeaders } from "../utils/auth";
+import Transcript from "../components/Transcript";
 
 interface Metadata {
   timestamp: string;
@@ -13,30 +16,34 @@ interface Metadata {
 }
 
 const Display = () => {
-  const { pdfId } = useParams();
+  const { pdfId } = useParams<{ pdfId: string }>();
+  const { hasAccessToPdf } = useAuth();
   const navigate = useNavigate();
   const [metadata, setMetadata] = useState<Metadata | null>(null);
   const [loading, setLoading] = useState(true);
+  const [currentSlide, setCurrentSlide] = useState(0);
 
   useEffect(() => {
     const fetchMetadata = async () => {
       try {
-        const response = await fetch(`http://localhost:5000/data/${pdfId}/metadata.json`);
+        const response = await fetch(
+          `http://localhost:8000/data/${pdfId}/metadata.json`,
+          {
+            headers: getAuthHeaders(),
+          }
+        );
         if (!response.ok) {
-          throw new Error('Failed to fetch metadata');
+          throw new Error("Failed to fetch metadata");
         }
         const data = await response.json();
-        if (data.status !== 'completed') {
+        if (data.status !== "completed") {
           navigate(`/configure/${pdfId}`);
           return;
         }
-        setMetadata({
-          ...data,
-          original_filename: data.original_filename
-        });
+        setMetadata(data);
       } catch (error) {
-        console.error('Error fetching metadata:', error);
-        navigate('/');
+        console.error("Error fetching metadata:", error);
+        navigate("/");
       } finally {
         setLoading(false);
       }
@@ -57,16 +64,36 @@ const Display = () => {
 
   return (
     <div className="display-container">
+      <button
+        onClick={() => navigate(-1)}
+        style={{
+          position: "fixed",
+          top: "10px",
+          left: "10px",
+          background: "none",
+          border: "none",
+          fontSize: "1.5rem",
+          fontWeight: "bold",
+          cursor: "pointer",
+          color: "#333",
+          zIndex: "2000",
+        }}
+        aria-label="Go back"
+      >
+        &lt;
+      </button>
+
       <div className="main-content">
-        {metadata && (
-          <Carousel
-            pdfId={pdfId!}
-            audioTimestamps={metadata.audio_timestamps}
-            timestamp={metadata.original_filename}
-          />
-        )}
+        <Carousel
+          pdfId={pdfId!}
+          audioTimestamps={metadata.audio_timestamps || []}
+          timestamp={metadata.original_filename}
+          currentSlide={currentSlide}
+          setCurrentSlide={setCurrentSlide}
+        />
+        <Transcript pdfId={pdfId!} currentSlide={currentSlide} />
       </div>
-      <div className="chatbot-section">
+      <div className="chatbot-container">
         <Chatbot />
       </div>
     </div>

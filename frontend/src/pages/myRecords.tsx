@@ -2,15 +2,15 @@ import React from "react";
 import Box from "@mui/material/Box";
 import Sidebar from "../components/Sidebar";
 
-const Starred = () => {
+const Records = () => {
   return (
     <div>
       <Box sx={{ display: "flex", paddingTop: "20px" }}>
         <Sidebar />
-        <h1>Starred</h1>
+        <h1>My Records</h1>
       </Box>
     </div>
   );
 };
 
-export default Starred;
+export default Records;

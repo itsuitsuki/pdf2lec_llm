@@ -23,17 +23,101 @@ import PDFViewer from "../components/pdfViewer";
 import { useNavigate } from "react-router-dom";
 import { PDFFile } from '../api/types';
 
+const StatusIndicator: React.FC<{ status: string }> = ({ status }) => {
+  const getStatusColor = () => {
+    switch (status) {
+      case 'completed':
+        return '#4CAF50';
+      case 'generating':
+        return '#FFC107';
+      case 'pending':
+        return '#9E9E9E';
+      case 'failed':
+        return '#F44336';
+      default:
+        return '#9E9E9E';
+    }
+  };
+
+  const getStatusText = () => {
+    switch (status) {
+      case 'completed':
+        return '✅ Ready';
+      case 'generating':
+        return '🔄 Generating...';
+      case 'pending':
+        return '⚪ Not Started';
+      case 'failed':
+        return '❌ Failed';
+      case 'non_lecture_pdf_error':
+        return '❌ Non-Lecture PDF';
+      default:
+        return 'Unknown Error';
+    }
+  };
+
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      color: getStatusColor(),
+      fontSize: '0.875rem'
+    }}>
+      <span style={{
+        width: '8px',
+        height: '8px',
+        borderRadius: '50%',
+        backgroundColor: getStatusColor()
+      }} />
+      {getStatusText()}
+    </div>
+  );
+};
+
 const Home = () => {
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [slides, setSlides] = useState<PDFFile[]>([]);
   const [selectedPDF, setSelectedPDF] = useState<string | null>(null);
   const navigate = useNavigate();
+  const [pollingErrors, setPollingErrors] = useState(0);
+  const MAX_POLLING_ERRORS = 3;
 
   useEffect(() => {
     console.log('Home component mounted');
     loadSlides();
   }, []);
+
+  useEffect(() => {
+    const pollStatus = async () => {
+      try {
+        const pendingOrGeneratingSlides = slides.filter(slide => 
+          ['pending', 'generating'].includes(slide.metadata?.status || '')
+        );
+        
+        if (pendingOrGeneratingSlides.length > 0) {
+          await loadSlides();
+          setPollingErrors(0); // Reset error count on successful poll
+        }
+      } catch (error) {
+        console.error('Polling error:', error);
+        setPollingErrors(prev => prev + 1);
+        
+        if (pollingErrors >= MAX_POLLING_ERRORS) {
+          console.error('Max polling errors reached, stopping polling');
+          return;
+        }
+      }
+    };
+
+    const intervalId = setInterval(pollStatus, 2000); // Poll every 2 seconds
+
+    // Cleanup function
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [slides, pollingErrors]);
 
   const loadSlides = async () => {
     console.log('=== Starting to load slides ===');
@@ -41,8 +125,14 @@ const Home = () => {
       const response = await pdfAPI.getPDFs('slide');
       console.log('🟢 Slides loaded successfully:', response.data);
       if (response.data) {
-        setSlides(response.data);
-        console.log('🟢 Slides state updated:', response.data);
+        // 按上传时间排序，最新的在前
+        const sortedSlides = response.data.sort((a, b) => {
+          const timeA = new Date(a.metadata?.upload_time || 0).getTime();
+          const timeB = new Date(b.metadata?.upload_time || 0).getTime();
+          return timeB - timeA;  // 降序排列
+        });
+        setSlides(sortedSlides);
+        console.log('🟢 Slides state updated:', sortedSlides);
       }
     } catch (error) {
       console.error('🔴 Failed to fetch slides:', error);
@@ -108,10 +198,28 @@ const Home = () => {
   };
 
   const showPDF = (pdf: PDFFile) => {
-    if (pdf.metadata?.status === 'completed') {
+    switch (pdf.metadata?.status) {
+      case 'completed':
         navigate(`/display/${pdf.id}`);
-    } else if (pdf.metadata?.status === 'pending' || !pdf.metadata?.status) {
+        break;
+      case 'generating':
+        alert('This lecture is currently being generated. Please wait for it to complete.');
+        break;
+      case 'non_lecture_pdf_error':
+        navigate('/error', { 
+          state: { 
+            reasoning: pdf.metadata?.validation?.reasoning || 'Unknown error occurred'
+          }
+        });
+        break;
+      case 'failed':
+        alert('Generation failed. Please try upload another PDF');
         navigate(`/configure/${pdf.id}`);
+        break;
+      case 'pending':
+      default:
+        navigate(`/configure/${pdf.id}`);
+        break;
     }
   };
 
@@ -195,24 +303,37 @@ const Home = () => {
                 {slides && slides.length > 0 ? (
                   slides.map((pdf) => (
                     <div className="pdf-container" key={pdf.id}>
-                      <ListItem sx={{ display: "flex", alignItems: "center" }}>
-                        <ListItemAvatar>
-                          <Avatar sx={{ backgroundColor: "rgb(95, 95, 226)", color: "white" }}>
-                            <FolderIcon />
-                          </Avatar>
-                        </ListItemAvatar>
-                        <ListItemText
-                          sx={{ cursor: "pointer" }}
-                          onClick={() => showPDF(pdf)}
-                          primary={<h3>{pdf.filename.split('_').slice(1).join('_')}</h3>}
-                        />
-                        <IconButton 
-                          edge="end" 
-                          aria-label="delete"
-                          onClick={() => handleDelete(pdf.id)}
-                        >
-                          <DeleteIcon />
-                        </IconButton>
+                      <ListItem sx={{ 
+                        display: "flex", 
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "8px 16px"
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", flex: 1 }}>
+                          <ListItemAvatar>
+                            <Avatar sx={{ backgroundColor: "rgb(95, 95, 226)", color: "white" }}>
+                              <FolderIcon />
+                            </Avatar>
+                          </ListItemAvatar>
+                          <ListItemText
+                            sx={{ cursor: "pointer" }}
+                            onClick={() => showPDF(pdf)}
+                            primary={<h3>{pdf.displayName}</h3>}
+                          />
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+                          <StatusIndicator status={pdf.metadata?.status || 'pending'} />
+                          <IconButton 
+                            edge="end" 
+                            aria-label="delete"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(pdf.id);
+                            }}
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </div>
                       </ListItem>
                     </div>
                   ))

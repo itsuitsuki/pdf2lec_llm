@@ -5,7 +5,10 @@ import { useParams } from "react-router-dom";
 const Chatbot: React.FC = () => {
   const { pdfId } = useParams<{ pdfId: string }>();
   const [messages, setMessages] = useState<{ sender: string; text: string }[]>([
-    { sender: "bot", text: "Hi! I'm your lecture assistant. Feel free to ask any questions about the lecture or general topics!" },
+    {
+      sender: "bot",
+      text: "Hi! I'm your lecture assistant. Feel free to ask any questions about the lecture or general topics!",
+    },
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -33,7 +36,10 @@ const Chatbot: React.FC = () => {
         pdfId: pdfId,
       });
 
-      setMessages((prev) => [...prev, { sender: "bot", text: response.data.reply }]);
+      setMessages((prev) => [
+        ...prev,
+        { sender: "bot", text: response.data.reply },
+      ]);
     } catch (error) {
       console.error("Error:", error);
       setMessages((prev) => [
@@ -53,27 +59,29 @@ const Chatbot: React.FC = () => {
   };
 
   return (
-    <div style={{ 
-      width: "350px",
-      position: "fixed",
-      right: "0px",
-      top: "0px",
-      bottom: "0px",
-      backgroundColor: "white",
-      boxShadow: "0 0 10px rgba(0,0,0,0.1)",
-      borderRadius: "10px",
-      padding: "15px",
-      display: "flex",
-      flexDirection: "column",
-      zIndex: 1000
-    }}>
-      <h2 style={{ marginBottom: "15px", fontSize: "27px" }}>Lecture Assistant</h2>
+    <div
+      style={{
+        width: "80%",
+        height: "100%",
+        backgroundColor: "white",
+        boxShadow: "0 0 10px rgba(0,0,0,0.1)",
+        borderRadius: "10px",
+        zIndex: 1000,
+        padding: "20px",
+        display: "flex",
+        flexDirection: "column",
+        marginLeft: "2%",
+      }}
+    >
+      <h2 style={{ marginBottom: "15px", fontSize: "27px" }}>
+        Lecture Assistant
+      </h2>
       <div
         style={{
           flex: 1,
           overflowY: "auto",
           border: "1px solid #ccc",
-          marginBottom: "22px",
+          marginBottom: "20px",
           borderRadius: "10px",
           padding: "7px",
         }}
@@ -82,9 +90,20 @@ const Chatbot: React.FC = () => {
           <div
             key={idx}
             className={`message ${msg.sender === "bot" ? "bot" : "user"}`}
+            style={{
+              marginBottom: "0.5rem",
+              // marginBottom: msg.sender === "bot" ? "1rem" : "0", 
+            }}
           >
             <div className="message-content">
-              <strong>{msg.sender === "bot" ? "Assistant" : "You"}:</strong> {msg.text}
+              <strong
+                style={{
+                  color: msg.sender === "bot" ? "darkblue" : "inherit",
+                }}
+              >
+                {msg.sender === "bot" ? "Assistant" : "You"}:
+              </strong>{" "}
+              {msg.text}
             </div>
           </div>
         ))}
@@ -97,11 +116,13 @@ const Chatbot: React.FC = () => {
         )}
         <div ref={messagesEndRef} />
       </div>
-      <div style={{ 
-        marginTop: "auto",
-        display: "flex", 
-        alignItems: "center" 
-      }}>
+      <div
+        style={{
+          marginTop: "auto",
+          display: "flex",
+          alignItems: "center",
+        }}
+      >
         <input
           type="text"
           value={input}
@@ -117,7 +138,7 @@ const Chatbot: React.FC = () => {
             marginRight: "10px",
           }}
         />
-        <button 
+        <button
           onClick={sendMessage}
           disabled={isLoading || input.trim() === ""}
           style={{

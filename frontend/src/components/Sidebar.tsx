@@ -12,13 +12,17 @@ import ListItemButton from "@mui/material/ListItemButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import HomeIcon from "@mui/icons-material/Home";
-import Star from "@mui/icons-material/Star";
+import FolderIcon from '@mui/icons-material/Folder';
+import LogoutIcon from '@mui/icons-material/Logout';
 import { useNavigate } from "react-router-dom";
+import { useAuth } from '../contexts/AuthContext';
 
 const drawerWidth = 240;
 
 export default function Sidebar() {
   const navigate = useNavigate();
+  const { logout } = useAuth();
+
   return (
     <Box sx={{ display: "flex" }}>
       <CssBaseline />
@@ -57,14 +61,26 @@ export default function Sidebar() {
             disablePadding
             sx={{ display: "block" }}
             onClick={() => {
-              navigate("/starred");
+              navigate("/my_records");
             }}
           >
             <ListItemButton>
               <ListItemIcon>
-                <Star />
+                <FolderIcon />
               </ListItemIcon>
-              <ListItemText primary="Starred" />
+              <ListItemText primary="My Records" />
+            </ListItemButton>
+          </ListItem>
+          <ListItem
+            disablePadding
+            sx={{ display: "block", marginTop: "auto" }}
+            onClick={logout}
+          >
+            <ListItemButton>
+              <ListItemIcon>
+                <LogoutIcon />
+              </ListItemIcon>
+              <ListItemText primary="Logout" />
             </ListItemButton>
           </ListItem>
         </List>
