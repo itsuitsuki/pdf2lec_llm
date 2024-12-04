@@ -16,6 +16,12 @@ def get_detailed_prompt():
         detailed_prompt = file.read()
     return detailed_prompt
 
+def get_slide_parsing_prompt():
+    SLIDE_PARSING_PROMPT_PATH = './prompts/slide_parsing_agent.txt' # Path to the prompt file
+    with open(SLIDE_PARSING_PROMPT_PATH, 'r') as file:
+        slide_parsing_prompt = file.read()
+    return slide_parsing_prompt
+
 def get_each_slide_prompt(complexity):
     if complexity == 1:
         return get_brief_prompt()

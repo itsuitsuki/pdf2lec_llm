@@ -1,8 +1,13 @@
 from openai import OpenAI
 from pathlib import Path
-from src.pdf2text import convert_pdf_to_images, merge_similar_images, generate_lecture_from_images_openai, digest_lecture_openai
+from src.pdf2text import convert_pdf_to_images, merge_similar_images, generate_lecture_from_images_openai, digest_lecture_openai, analyze_image_with_agent
 from src.tts import generate_audio_files_openai
-from prompts.slide_prompts import get_each_slide_prompt, get_summarizing_prompt, get_introduction_prompt
+from prompts.slide_prompts import (
+    get_each_slide_prompt, 
+    get_summarizing_prompt, 
+    get_introduction_prompt,
+    get_slide_parsing_prompt
+)
 from pydub import AudioSegment
 import datetime
 import json
@@ -16,6 +21,7 @@ import threading
 from src.arg_models import LecGenerateArgs
 # from src.logger import CustomLogger
 from src.guard_agent import validate_course_material
+from tqdm import tqdm
 
 def deep_merge_dict(dict1: dict, dict2: dict) -> dict:
     """
@@ -172,27 +178,56 @@ def pdf2lec(_args: LecGenerateArgs, task_id):
                     logger.info(f"Task {task_id}: Creating textbook index")
                     faiss_textbook_indexer.create_index()
 
-            # Select the appropriate prompt based on the complexity parameter
-            prompt = get_each_slide_prompt(COMPLEXITY)
-            
+            # Get both prompts
+            slide_parsing_prompt = get_slide_parsing_prompt()
+            lecture_prompt = get_each_slide_prompt(COMPLEXITY)
 
-            content_list, _ = generate_lecture_from_images_openai(
+            # Create a directory for slide analysis results
+            slide_analysis_dir = f"{base_dir}/slide_analysis"
+            Path(slide_analysis_dir).mkdir(parents=True, exist_ok=True)
+
+            content_list, image_files, slide_analyses = generate_lecture_from_images_openai(
                 client,
                 merged_image_dir,
-                prompt=prompt,
-                faiss_textbook_indexer=faiss_textbook_indexer,  # Pass the indexer
+                parsing_prompt=slide_parsing_prompt,
+                lecture_prompt=lecture_prompt,
+                faiss_textbook_indexer=faiss_textbook_indexer,
                 context_size=TEXT_GENERATING_CONTEXT_SIZE,
                 model_name=PAGE_MODEL,
                 max_tokens=MAX_TOKENS,
                 multiagent=_args.multiagent,
             )
 
-            # Log generated content
-            # for i, (content, image) in enumerate(zip(content_list, image_files)):
-            #     logger.debug(f"Task {task_id}: Generated content for image {image}:")
-            #     logger.debug("-" * 50)
-            #     logger.debug(content)
-            #     logger.debug("-" * 50)
+            # Save slide analyses
+            analysis_output = {
+                "timestamp": TIMESTAMP,
+                "total_slides": len(slide_analyses),
+                "analyses": []
+            }
+
+            for i, (analysis, image_file) in enumerate(zip(slide_analyses, image_files)):
+                analysis_entry = {
+                    "slide_number": i + 1,
+                    "image_file": image_file,
+                    "analysis": analysis
+                }
+                analysis_output["analyses"].append(analysis_entry)
+
+            # Save to JSON file
+            analysis_file = f"{slide_analysis_dir}/slide_analyses.json"
+            with open(analysis_file, 'w', encoding='utf-8') as f:
+                json.dump(analysis_output, f, ensure_ascii=False, indent=4)
+
+            logger.info(f"Task {task_id}: Slide analyses saved to {analysis_file}")
+
+            # Update metadata with analysis information
+            METADATA.update({
+                "slide_analysis": {
+                    "file_path": analysis_file,
+                    "total_slides": len(slide_analyses),
+                    "timestamp": TIMESTAMP
+                }
+            })
 
             # save each content into a separate file
             for i, content in enumerate(content_list):

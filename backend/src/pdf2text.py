@@ -12,8 +12,17 @@ from utils.similarity import calculate_similarity
 from src.logger import CustomLogger
 import logging
 from prompts.multiagent_prompts import get_clarity_prompt, get_engagement_prompt, get_assembler_prompt
+from prompts.slide_prompts import (
+    get_each_slide_prompt, 
+    get_summarizing_prompt, 
+    get_introduction_prompt,
+    get_slide_parsing_prompt  # Add this new import
+)
 # logger = CustomLogger.get_logger(__name__)
 logger = logging.getLogger("uvicorn")
+import json
+import re
+
 
 def analyze_page_by_image_openai(client, prompt, image_path, textbook_content=None, model_name="gpt-4o", max_tokens=500):
     """
@@ -303,19 +312,19 @@ def merge_similar_images(image_dir, output_dir, similarity_threshold=0.4, max_me
     
     logger.info(f"Image merging completed: {total_groups} merged images saved")
 
-def generate_lecture_from_images_openai(client, image_dir, prompt, faiss_textbook_indexer=None, context_size=2, model_name="gpt-4o", max_tokens=500, multiagent = False):
+def generate_lecture_from_images_openai(
+    client, 
+    image_dir, 
+    parsing_prompt, 
+    lecture_prompt, 
+    faiss_textbook_indexer=None, 
+    context_size=2, 
+    model_name="gpt-4o", 
+    max_tokens=500, 
+    multiagent=False
+    ):
     """
     Generate a complete lecture by analyzing images in sequence, maintaining context.
-    
-    :param client: OpenAI API client
-    :param image_dir: Directory containing the merged images
-    :param prompt: The base prompt to use for image analysis
-    :param faiss_textbook_indexer: FAISS Textbook indexer object (short term, not persisted) # FIXME: need to update to PGVector indexer
-    :param context_size: Number of previous slides to consider for context
-    :param model_name: The name of the model to use
-    :param max_tokens: The maximum number of tokens to generate
-    :param multiagent: Whether to use multi-agent refinement
-    :return: A list of content for each slide, and the list of image files corresponding to each slide
     """
     image_files = sorted([f for f in os.listdir(image_dir) if f.endswith('.png')])
     total_slides = len(image_files)
@@ -323,37 +332,64 @@ def generate_lecture_from_images_openai(client, image_dir, prompt, faiss_textboo
     
     context = []
     contents = []
+    slide_analyses = []
+    # 新增：存储RAG信息的列表
+    rag_info = []
+    
     pbar = tqdm(total=len(image_files))
     pbar.set_description("Generating lecture text")
     
     for i, image_file in enumerate(image_files):
         image_path = os.path.join(image_dir, image_file)
         
-        # Get relevant textbook content if available
+        # First pass: Parse the slide with structured output
+        analysis_result = analyze_image_with_agent(
+            client, 
+            image_path, 
+            parsing_prompt, 
+            context[-context_size:] if context else [], 
+            model_name=model_name, 
+            max_tokens=max_tokens
+        )
+        slide_analyses.append(analysis_result)
+        
+        # Get relevant textbook content using the keyword from analysis
         textbook_content = None
+        current_rag_info = {
+            "slide_number": i + 1,
+            "keyword": analysis_result['keyword'],
+            "textbook_content": None
+        }
+        
         if faiss_textbook_indexer:
-            # Extract text from image for query (you might need to implement this)
-            # For now, we'll use the context as query
-            query = " ".join(context[-2:]) if context else "Introduction to the topic"
+            query = analysis_result['keyword']
             textbook_content = faiss_textbook_indexer.get_relevant_content(
                 query=query,
                 index_name=Path(faiss_textbook_indexer.textbook_path).stem
-            ) # List[str]
+            )
+            current_rag_info["textbook_content"] = textbook_content
             logger.debug(f"Textbook content: {textbook_content}")
         
-        context_prompt = f"{prompt}\n\nContext from previous slides:\n{' '.join(context)}\n\nAnalyze the current slide in the context of what has been discussed before. Remember do not repeat the same information."
-            
-        # Modify prompt to include textbook content if available
-        enhanced_prompt = context_prompt
+        rag_info.append(current_rag_info)
+        
+        # Build the context prompt with the new structure
+        context_prompt = (
+            f"{lecture_prompt}\n\n"
+            f"Context:\n{' '.join(context[-context_size:]) if context else 'No previous context'}\n\n"
+        )
+        
         if textbook_content:
-            enhanced_prompt += "\n\nRelevant textbook content:\n" + "\n".join(textbook_content)
-            enhanced_prompt += "\n\nPlease incorporate relevant information from the textbook in your explanation."
-        logger.debug(f"Enhanced prompt: {enhanced_prompt}")
+            context_prompt += "Relevant textbook information provided for you:\n" + "\n".join(textbook_content) + "\n\n"
+            
+        context_prompt += (
+            f"Here is the explanation of the image provided for you:\n"
+            f"{analysis_result['description']}\n\n"
+        )
         
-        
+        # Use the complexity from analysis instead of user input
         slide_content = analyze_page_by_image_openai(
             client, 
-            enhanced_prompt, 
+            context_prompt, 
             image_path, 
             model_name=model_name, 
             max_tokens=max_tokens
@@ -367,11 +403,23 @@ def generate_lecture_from_images_openai(client, image_dir, prompt, faiss_textboo
         logger.info(f"Completed slide {i}/{total_slides}")
     
     logger.info(f"Lecture generation completed: all {total_slides} slides processed")
+    
+    # 保存RAG信息到JSON文件
+    base_dir = str(Path(image_dir).parent)
+    rag_info_path = os.path.join(base_dir, "rag_info.json")
+    with open(rag_info_path, 'w', encoding='utf-8') as f:
+        json.dump({
+            "total_slides": total_slides,
+            "rag_details": rag_info
+        }, f, ensure_ascii=False, indent=2)
+    logger.info(f"RAG information saved to {rag_info_path}")
+    
     if multiagent:
         logger.info("Starting multi-agent refinement")
         contents = multiagent_generation(client, contents, model_name=model_name)
         logger.info("Multi-agent refinement completed")
-    return contents, image_files
+    
+    return contents, image_files, slide_analyses
 
 def digest_lecture_openai(client, complete_lecture, digest_prompt, model_name="gpt-4o-mini"):
     """Generate lecture summary"""
@@ -388,3 +436,86 @@ def digest_lecture_openai(client, complete_lecture, digest_prompt, model_name="g
     )
     logger.info("Lecture summary generation completed")
     return summary.choices[0].message.content
+
+def analyze_image_with_agent(client, image_path, prompt, context, model_name="gpt-4o", max_tokens=500):
+    """
+    Analyze an image and return a detailed description, page number, keyword, and complexity.
+
+    :param client: OpenAI API client
+    :param image_path: Local path to the image file
+    :param prompt: The text prompt for the model
+    :param context: Context from the previous image analysis
+    :param model_name: The name of the model to use
+    :param max_tokens: The maximum number of tokens to generate
+    :return: A dictionary with description, page number, keyword, and complexity
+    """
+    # Encode the image
+    base64_image = encode_image_path_to_base64(image_path)
+
+    try:
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{base64_image}",
+                                "detail": "high"
+                            }
+                        },
+                        {"type": "text", "text": f"Context: {context}"}
+                    ]
+                }
+            ],
+            max_tokens=max_tokens
+        )
+        # Parse the response to extract the required fields
+        content = response.choices[0].message.content
+        
+        # 首先尝试匹配markdown代码块中的JSON
+        json_match = re.search(r'```(?:json)?\s*(\{[\s\S]*?\})\s*```', content)
+        if json_match:
+            json_str = json_match.group(1)
+        else:
+            # 如果没有markdown代码块，尝试直接匹配最外层的花括号内容
+            json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', content)
+            if json_match:
+                json_str = json_match.group(0)
+            else:
+                raise ValueError("No valid JSON found in response")
+
+        try:
+            parsed_response = json.loads(json_str)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON: {e}")
+            logger.error(f"Raw response content: {content}")
+            logger.error(f"Extracted JSON string: {json_str}")
+            # 提供默认响应
+            parsed_response = {
+                "Description": "Failed to parse slide content",
+                "Keywords": "error",
+                "Complexity": 1
+            }
+        
+        # 构建结果，包含默认值
+        result = {
+            "description": parsed_response.get("Description", "No description available"),
+            "keyword": parsed_response.get("Keywords", "No keywords available"),
+            "complexity": int(parsed_response.get("Complexity", 1))
+        }
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error analyzing image: {str(e)}")
+        logger.error(f"Raw response content: {content if 'content' in locals() else 'No content generated'}")
+        raise e
+
+def get_slide_parsing_prompt():
+    """Load the slide parsing prompt from file"""
+    prompt_path = Path("backend/prompts/slide_parsing_agent.txt")
+    with open(prompt_path, "r", encoding="utf-8") as f:
+        return f.read()
