@@ -60,48 +60,62 @@ const Carousel: React.FC<CarouselProps> = ({
   const [audioUrl, setAudioUrl] = useState<string>("");
   const baseAudioUrl = `http://localhost:8000/data/${pdfId}/generated_audios/combined.mp3`;
 
-  // 修改 URL 构建方式，添加认证头
+  // 修改 URL 构建方式
   const headers = getAuthHeaders();
-  const pdfUrl = `http://localhost:8000/data/${pdfId}/${timestamp}`;
+  const baseImageUrl = `http://localhost:8000/data/${pdfId}/merged_images`;
 
   useEffect(() => {
-    const loadPdf = async () => {
+    const loadImages = async () => {
       try {
-        console.log("Loading PDF from URL:", pdfUrl);
+        setLoading(true);
         const token = localStorage.getItem("token");
-        const loadingTask = pdfjs.getDocument({
-          url: pdfUrl,
-          httpHeaders: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        const pdf = await loadingTask.promise;
-        console.log("PDF loaded successfully, pages:", pdf.numPages);
         const slideImages: string[] = [];
+        let index = 1; // 从001开始
+        let consecutiveFailures = 0; // 记录连续失败次数
 
-        for (let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
-          const viewport = page.getViewport({ scale: 1 });
-          const canvas = document.createElement("canvas");
-          const context = canvas.getContext("2d");
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
+        // 尝试加载图片直到连续四次失败为止
+        while (consecutiveFailures < 4) {
+          const paddedIndex = index.toString().padStart(3, '0');
+          const imageUrl = `${baseImageUrl}/merged_${paddedIndex}.png`;
+          
+          try {
+            const response = await fetch(imageUrl, {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            });
+            
+            if (!response.ok) {
+              consecutiveFailures++;
+            } else {
+              const blob = await response.blob();
+              const imageDataUrl = URL.createObjectURL(blob);
+              slideImages.push(imageDataUrl);
+              consecutiveFailures = 0; // 重置失败计数
+            }
+          } catch (error) {
+            consecutiveFailures++;
+          }
 
-          await page.render({ canvasContext: context!, viewport }).promise;
-          slideImages.push(canvas.toDataURL());
+          index++;
         }
 
         setSlides(slideImages);
       } catch (error) {
-        console.error("Error loading PDF:", error);
-        console.error("PDF URL was:", pdfUrl);
+        console.error("Error loading images:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    loadPdf();
-  }, [pdfUrl]);
+    loadImages();
+
+    // Cleanup function
+    return () => {
+      // 清理创建的 object URLs
+      slides.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, [baseImageUrl]);
 
   useEffect(() => {
     const loadAudio = async () => {
