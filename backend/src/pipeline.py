@@ -47,7 +47,6 @@ def pdf2lec(_args: LecGenerateArgs, task_id):
     logger.setLevel(logging.DEBUG if _args.debug_mode else logging.INFO)
     logger.info(f"Task {task_id} started.")
     try:
-        COMPLEXITY = _args.complexity
         SIMILARITY_THRESHOLD_TO_MERGE = _args.similarity_threshold
         TEXT_GENERATING_CONTEXT_SIZE = _args.text_generating_context_size
         MAX_TOKENS = _args.max_tokens
@@ -77,7 +76,6 @@ def pdf2lec(_args: LecGenerateArgs, task_id):
             "digest_model": DIGEST_MODEL,
             "tts_model": TTS_MODEL,
             "tts_voice": TTS_VOICE,
-            "complexity": COMPLEXITY,
             "use_rag": _args.use_rag,
             "textbook_name": _args.textbook_name,
             "multiagent": _args.multiagent,
@@ -180,7 +178,6 @@ def pdf2lec(_args: LecGenerateArgs, task_id):
 
             # Get both prompts
             slide_parsing_prompt = get_slide_parsing_prompt()
-            lecture_prompt = get_each_slide_prompt(COMPLEXITY)
 
             # Create a directory for slide analysis results
             slide_analysis_dir = f"{base_dir}/slide_analysis"
@@ -190,7 +187,6 @@ def pdf2lec(_args: LecGenerateArgs, task_id):
                 client,
                 merged_image_dir,
                 parsing_prompt=slide_parsing_prompt,
-                lecture_prompt=lecture_prompt,
                 faiss_textbook_indexer=faiss_textbook_indexer,
                 context_size=TEXT_GENERATING_CONTEXT_SIZE,
                 model_name=PAGE_MODEL,

@@ -316,7 +316,6 @@ def generate_lecture_from_images_openai(
     client, 
     image_dir, 
     parsing_prompt, 
-    lecture_prompt, 
     faiss_textbook_indexer=None, 
     context_size=2, 
     model_name="gpt-4o", 
@@ -352,6 +351,10 @@ def generate_lecture_from_images_openai(
             max_tokens=max_tokens
         )
         slide_analyses.append(analysis_result)
+        
+        # Use the complexity from analysis to get the appropriate lecture prompt
+        complexity = analysis_result['complexity']
+        lecture_prompt = get_each_slide_prompt(complexity)
         
         # Get relevant textbook content using the keyword from analysis
         textbook_content = None
