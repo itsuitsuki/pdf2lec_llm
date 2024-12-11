@@ -61,7 +61,7 @@ export default function Sidebar() {
             disablePadding
             sx={{ display: "block" }}
             onClick={() => {
-              navigate("/my_records");
+              navigate("/myrecords");
             }}
           >
             <ListItemButton>

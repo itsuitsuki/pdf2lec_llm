@@ -19,7 +19,6 @@ import DeleteIcon from "@mui/icons-material/Delete";
 
 import "../styles/Home.css";
 import { pdfAPI } from '../api/pdf';
-import PDFViewer from "../components/pdfViewer";
 import { useNavigate } from "react-router-dom";
 import { PDFFile } from '../api/types';
 
@@ -299,7 +298,7 @@ const Home = () => {
           >
             <h1>Uploaded PDFs</h1>
             <div className="uploaded-container">
-              <List sx={{ width: "40%" }}>
+              <List sx={{ width: "45%" }}>
                 {slides && slides.length > 0 ? (
                   slides.map((pdf) => (
                     <div className="pdf-container" key={pdf.id}>
@@ -309,7 +308,7 @@ const Home = () => {
                         justifyContent: "space-between",
                         padding: "8px 16px"
                       }}>
-                        <div style={{ display: "flex", alignItems: "center", flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", flex: 1}}>
                           <ListItemAvatar>
                             <Avatar sx={{ backgroundColor: "rgb(95, 95, 226)", color: "white" }}>
                               <FolderIcon />
@@ -345,27 +344,6 @@ const Home = () => {
               </List>
             </div>
           </Box>
-
-          {/* Render the PDF viewer conditionally */}
-          {/* <Box
-            sx={{
-              display: "flex",
-              flexDirection: "row",
-              // justifyContent: "center",
-            }}
-          >
-            {selectedPDF && (
-              <div className="pdf-viewer">
-                <PDFViewer pdfUrl={selectedPDF} />
-              </div>
-            )}
-            {selectedPDF && (
-              <div style = {{display:"flex", flexDirection:"column", paddingLeft: "20px", gap: "1rem", paddingTop: "60px"}}>
-                <button onClick={playAudio} style ={{backgroundColor: "#8FD3F8"}}>Play</button>
-                <button onClick={pause} style ={{backgroundColor: "#8FD3F8"}}>Pause</button>
-              </div>
-            )}
-          </Box> */}
         </Box>
       </Box>
     </div>

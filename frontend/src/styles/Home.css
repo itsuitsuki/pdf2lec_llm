@@ -52,7 +52,7 @@ button {
   display: flex;
   align-items: center;
   align-content: center;
-  gap: 2rem;
+  gap: 3rem;
 }
 .pdf-container:hover {
   background-color: rgba(95, 95, 226, 0.1); 
