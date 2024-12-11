@@ -2,6 +2,9 @@
 redis/
 redis/*
 .vscode/
+metadata/
+data/
+test/
 
 *.pem
 
