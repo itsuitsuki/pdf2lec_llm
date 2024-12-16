@@ -7,7 +7,7 @@ import Display from "./pages/Display";
 import ConfigurePage from "./pages/ConfigurePage";
 import { useAuth } from "./contexts/AuthContext";
 import ErrorPage from "./pages/ErrorPage";
-import MyRecords from "./pages/MyRecords";
+import MyRecords from "./pages/myRecords";
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated } = useAuth();

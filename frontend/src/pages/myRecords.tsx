@@ -40,39 +40,25 @@ const MyRecords = () => {
   // Example data for demonstration
   const all_records = [
     {
-      title: "PDF Lecture Notes",
-      tags: ["GPT", "RAG-Compressed", "AI"],
-      description: "A detailed lecture on AI and its advancements.",
-      total_time: 90,
+      title: "L6-Classsification-917_1-3.pdf",
+      tags: ["Computer Science", "Machine Learning"],
+      description: "A lecture anout generative and discriminative classification",
+      total_time: 8,
       time_uploaded: Date.now(),
     },
     {
-      title: "Machine Learning Basics",
-      tags: ["ML", "Supervised Learning", "Regression"],
-      description: "An introductory lecture on supervised learning.",
-      total_time: 60,
-      time_uploaded: Date.now() - 3600000,
+      title: "cs168-fa24-lec07.pdf",
+      tags: ["Computer Science", "Internet"],
+      description: "A lecture about Distance Vector Protocol",
+      total_time: 40,
+      time_uploaded: Date.now(),
     },
     {
-      title: "Machine Learning Basics",
-      tags: ["ML", "Supervised Learning", "Regression"],
-      description: "An introductory lecture on supervised learning. adofjoajsdfasdfasjdfo;ajsdof;jasojdfoasjdfo;ajsdofijaosjdf;aosdfdafdsafsadfasdfasdfsda",
-      total_time: 60,
-      time_uploaded: Date.now() - 3600000,
-    },
-    {
-      title: "Machine Learning Basics",
-      tags: ["ML", "Supervised Learning", "Regression"],
-      description: "An introductory lecture on supervised learning.",
-      total_time: 60,
-      time_uploaded: Date.now() - 3600000,
-    },
-    {
-      title: "Machine Learning Basics",
-      tags: ["ML", "Supervised Learning", "Regression"],
-      description: "An introductory lecture on supervised learning.",
-      total_time: 60,
-      time_uploaded: Date.now() - 3600000,
+      title: "Agent_and_LLM_Definitions.pdf",
+      tags: ["Computer Science", "Artificial Intelligence"],
+      description: "A lecture about Artificial Intelligence and large language model agents",
+      total_time: 10,
+      time_uploaded: Date.now(),
     },
   ];
 
