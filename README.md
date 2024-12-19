@@ -11,8 +11,14 @@ tested on Ubuntu 22.02.
 follow the following procedure to build up.
 The complete architechure is built under `mutian-develop-v8` branch. The rag function in the main branch does not works well. So if you want the same architechure in the report, please switch to branch `mutian-develop-v8`.
 
+### Setup
+set up an .env file with the OpenAI API Key:
+```
+export OPENAI_API_KEY="your API key"
+```
+
 ### Backend
-#### 1. install miniconda
+#### 1. install miniconda (skip if already installed)
 ```
 wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
 chmod +x Miniconda3-latest-Linux-x86_64.sh
@@ -20,7 +26,7 @@ chmod +x Miniconda3-latest-Linux-x86_64.sh
 source ~/.bashrc
 ```
 
-#### 2. install docker
+#### 2. install docker (skip if already installed)
 ```
 sudo apt-get update
 sudo apt-get install -y \
@@ -42,7 +48,7 @@ sudo chmod +x /usr/local/bin/docker-compose
 newgrp docker
 ```
 
-#### 3. setup opencv
+#### 3. setup opencv (skip if already installed)
 ```
 sudo apt-get install -y \
     libgl1 \
@@ -68,7 +74,7 @@ sudo apt install ffmpeg
 
 #### 6. create data folder
 ```
-cd pdf2lec_llm/backend
+cd backend
 mkdir -p data metadata
 ```
 
@@ -79,14 +85,22 @@ bash run.sh
 
 ### Frontend
 ```
-cd ~/
-cd pdf2lec_llm/frontend
+cd ..
+cd frontend
+```
+
+#### Install Nodejs (skip if already installed)
+```
 sudo apt update
 curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt-get install -y nodejs
 ```
 
+#### Start Frontend
 ```
 npm install
 npm run dev
 ```
+
+### Create Login and use product
+Run the application on http://localhost:5173/ should lead you to a login window. click on sign-up and create a user with a password, then log in. Upload your lecture PDF and click on the uploaded PDF. Choose your generation granularity and add textbook (optional). If you uploaded a lecture PDF, it should start loading (~20-30s per slide).
