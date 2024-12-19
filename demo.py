@@ -6,11 +6,11 @@ from prompts.slide_prompts import get_each_page_prompt, get_summarizing_prompt, 
 from pydub import AudioSegment
 from tqdm import tqdm
 
-SIMILARITY_THRESHOLD_TO_MERGE = 0.4
+SIMILARITY_THRESHOLD_TO_MERGE = 0.6
 TEXT_GENERATING_CONTEXT_SIZE = 2
 MAX_TOKENS = 1000
 
-TEST_PDF_NAME = "L23-MDP-11-14"
+TEST_PDF_NAME = "Discussion2_CircRhythms_2024_detailed"
 PDF_PATH = f"./test/{TEST_PDF_NAME}.pdf"
 
 PAGE_MODEL = "gpt-4o"
