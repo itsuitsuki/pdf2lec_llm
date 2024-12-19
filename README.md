@@ -56,7 +56,7 @@ sudo apt-get install -y \
     pkg-config
 ```
 
-use tag to select ok
+use tab to select ok
 
 #### 5. setup conda env
 ```
