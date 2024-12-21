@@ -12,7 +12,12 @@ follow the following procedure to build up.
 The complete architechure is built under `mutian-develop-v8` branch. The rag function in the main branch does not works well. So if you want the same architechure in the report, please switch to branch `mutian-develop-v8`.
 
 ### Setup
-set up an .env file under root with the OpenAI API Key:
+#### 1 clone the code
+```
+git clone https://github.com/itsuitsuki/pdf2lec_llm
+```
+
+set up an .env file under root(pdf2lec_llm/) with the OpenAI API Key:
 ```
 export OPENAI_API_KEY="your API key"
 ```
