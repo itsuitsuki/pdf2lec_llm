@@ -11,6 +11,9 @@ tested on Ubuntu 22.02.
 follow the following procedure to build up.
 The complete architechure is built under `mutian-develop-v8` branch. The rag function in the main branch does not works well. So if you want the same architechure in the report, please switch to branch `mutian-develop-v8`.
 
+### Demo
+[Watch the Demo](https://drive.google.com/file/d/1Bwz0QjSm6EhIr3modGYT_YvGZ9t7UsPB/view?usp=sharing)
+
 ### Setup
 #### 1 clone the code
 ```
